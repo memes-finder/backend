@@ -1,0 +1,187 @@
+<?php
+
+namespace App\Models;
+
+use Phalcon\Mvc\Model;
+
+class Memes extends Model
+{
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_APPROVED = 'approved';
+
+    /**
+     * @var int
+     */
+    public $id;
+
+    /**
+     * @var string
+     */
+    public $file_path;
+
+    /**
+     * @var string|null
+     */
+    public $source_url;
+
+    /**
+     * @var string|null
+     */
+    public $source_type;
+
+    /**
+     * @var int|null
+     */
+    public $width;
+
+    /**
+     * @var int|null
+     */
+    public $height;
+
+    /**
+     * @var int|null
+     */
+    public $file_size;
+
+    /**
+     * @var string|null
+     */
+    public $mime_type;
+
+    /**
+     * @var string|null
+     */
+    public $file_hash;
+
+    /**
+     * @var string
+     */
+    public $status;
+
+    /**
+     * @var string
+     */
+    public $created_at;
+
+    /**
+     * @var string
+     */
+    public $updated_at;
+
+    public function initialize()
+    {
+        $this->setSource('memes');
+        
+        $this->hasMany(
+            'id',
+            MemeTags::class,
+            'meme_id',
+            [
+                'alias' => 'tags',
+                'reusable' => true
+            ]
+        );
+
+        // Add behaviors
+        $this->addBehavior(
+            new \Phalcon\Mvc\Model\Behavior\Timestampable([
+                'beforeCreate' => [
+                    'field' => 'created_at',
+                    'format' => 'Y-m-d H:i:s'
+                ],
+                'beforeUpdate' => [
+                    'field' => 'updated_at',
+                    'format' => 'Y-m-d H:i:s'
+                ]
+            ])
+        );
+    }
+
+    public function beforeCreate()
+    {
+        // Set default status if not set
+        if (empty($this->status)) {
+            $this->status = self::STATUS_PENDING;
+        }
+    }
+
+    /**
+     * Approve the meme
+     * @return bool
+     */
+    public function approve(): bool
+    {
+        $this->status = self::STATUS_APPROVED;
+        return $this->save();
+    }
+
+    /**
+     * Check if meme is approved
+     * @return bool
+     */
+    public function isApproved(): bool
+    {
+        return $this->status === self::STATUS_APPROVED;
+    }
+
+    /**
+     * Get tags by language
+     * @param string $language 'en' or 'ar'
+     * @return MemeTags[]
+     */
+    public function getTagsByLanguage(string $language)
+    {
+        return $this->getTags([
+            'conditions' => 'language = :language:',
+            'bind' => ['language' => $language]
+        ]);
+    }
+
+    /**
+     * Get public URL for the meme
+     * @return string
+     */
+    public function getPublicUrl()
+    {
+        // Implement CDN URL generation based on file_path
+        $config = $this->getDI()->get('config');
+        // Example implementation - modify based on your CDN setup
+        return sprintf(
+            'https://%s.s3.%s.amazonaws.com/%s',
+            $config->aws->bucket,
+            $config->aws->region,
+            $this->file_path
+        );
+    }
+
+    /**
+     * Get all tags for this meme
+     * @param array|null $params Query parameters
+     * @return MemeTags[]
+     */
+    public function getTags($params = null)
+    {
+        return $this->getRelated('tags', $params);
+    }
+
+    /**
+     * Convert meme to array with tags grouped by language
+     * @return array
+     */
+    public function toArray($columns = null): array
+    {
+        $data = parent::toArray($columns);
+        
+        // Get tags grouped by language
+        $tags = ['en' => [], 'ar' => []];
+        foreach ($this->getTags() as $tag) {
+            $tags[$tag->language][] = $tag->tag;
+        }
+        
+        $data['tags'] = $tags;
+        $data['public_url'] = $this->getPublicUrl();
+        
+        return $data;
+    }
+}
