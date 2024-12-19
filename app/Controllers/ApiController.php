@@ -62,7 +62,7 @@ class ApiController extends Controller
 
             /** @var SearchService $searchService */
             $searchService = $this->di->get('searchService');
-            $memeIds = $searchService->search($query, $responseLanguage, $limit, $offset);
+            $memeIds = $searchService->search($query, $responseLanguage, $limit, $offset, Memes::STATUS_APPROVED);
 
             // Get meme details
 //            $memeIds = array_column($results['items'], 'meme_id');

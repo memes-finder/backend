@@ -33,6 +33,7 @@ class AdminController extends ControllerBase
         $binds = [];
         $parameters = [];
         
+        // Add status condition if selected
         if ($status) {
             $conditions[] = 'status = :status:';
             $binds['status'] = $status;
@@ -43,7 +44,8 @@ class AdminController extends ControllerBase
             try {
                 /** @var \App\Services\SearchService $searchService */
                 $searchService = $this->di->get('searchService');
-                $memeIds = $searchService->search($searchQuery, null, 1000, 0); // Get more results for pagination
+                // Only exclude status filter if no status is selected
+                $memeIds = $searchService->search($searchQuery, null, 1000, 0, $status);
                 
                 if (!empty($memeIds)) {
                     $conditions[] = 'id IN ({meme_ids:array})';

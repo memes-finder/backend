@@ -161,9 +161,10 @@ class SearchService extends Injectable
      * @param string|null $language
      * @param int $limit
      * @param int $offset
+     * @param string $status If true, includes all memes regardless of status
      * @return array
      */
-    public function search(string $query, string $language = null, int $limit = 10, int $offset = 0): array
+    public function search(string $query, string $language = null, int $limit = 10, int $offset = 0, string $status = ''): array
     {
         try {
             // Ensure index exists with stemming
@@ -201,13 +202,20 @@ class SearchService extends Injectable
                 return [];
             }
 
-            // Only return approved memes
+            // Build query conditions
+            $conditions = ['id IN ({ids:array})'];
+            $binds = ['ids' => $memeIds];
+
+            // Only filter by status for non-admin searches
+            if ($status) {
+                $conditions[] = 'status = :status:';
+                $binds['status'] = $status;
+            }
+
+            // Get memes
             $memes = Memes::find([
-                'conditions' => 'id IN ({ids:array}) AND status = :status:',
-                'bind' => [
-                    'ids' => $memeIds,
-                    'status' => Memes::STATUS_APPROVED
-                ],
+                'conditions' => implode(' AND ', $conditions),
+                'bind' => $binds,
                 'limit' => $limit,
                 'offset' => $offset
             ]);
