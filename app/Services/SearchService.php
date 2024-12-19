@@ -8,6 +8,7 @@ use Ehann\RediSearch\Index;
 use Ehann\RediSearch\Suggestion;
 use Phalcon\Di\Injectable;
 use App\Models\Memes;
+use Phalcon\Logger;
 
 class SearchService extends Injectable
 {
@@ -25,8 +26,14 @@ class SearchService extends Injectable
     /** @var \Redis */
     private $redis;
 
+    /**
+     * @var Logger
+     */
+    protected $logger;
+
     public function __construct()
     {
+        $this->logger = $this->getDI()->getLogger();
         $this->redis = $this->getDI()->getCache()['adapter']->redis;
         $this->redisIndexing = $this->getDI()->get('redisIndex');
         $this->redisSuggesting = $this->getDI()->get('redisSuggest');
@@ -127,9 +134,6 @@ class SearchService extends Injectable
         try {
             $this->ensureIndex();
 
-//            $documentId = sprintf('meme_tag:%d:%s:%s', $memeId, $tag, $language);
-//            $documentId = sprintf('meme_tag:%d:%s:%s:%s', $memeId, $tag, $language, uniqid());
-
             // For Arabic tags, store both original and normalized versions
             if (preg_match('/\p{Arabic}/u', $tag)) {
                 $normalizedTag = $this->normalizeArabicText($tag);
@@ -142,7 +146,10 @@ class SearchService extends Injectable
 
             return $this->redisIndexing->add($document);
         } catch (\Exception $e) {
-            error_log("Error indexing tag: " . $e->getMessage());
+            $this->logger->error(
+                'Indexing failed: ' . $e->getMessage(),
+                ['exception' => $e, 'args' => func_get_args()]
+            );
             throw $e;
         }
     }
@@ -172,8 +179,6 @@ class SearchService extends Injectable
             // Build search query with multiple variations and stemming
             $searchTerms = [
                 $query,              // Exact match
-//                $query . '*',        // Prefix match
-//                $normalizedQuery,    // Normalized match
                 $normalizedQuery . '*' // Normalized prefix match
             ];
 
@@ -181,10 +186,6 @@ class SearchService extends Injectable
             $searchQuery = '@tag:(' . implode('|', array_map(function($term) {
                 return '~' . addslashes($term);  // Add %% for stemming
             }, $searchTerms)) . ') @tag_normalized:(~' . $normalizedQuery . ')';
-
-//            if ($language) {
-//                $searchQuery .= ' @language:(' . $language . ')';
-//            }
 
             $results = $this->redisIndexing->search($searchQuery, true);
             
@@ -213,7 +214,10 @@ class SearchService extends Injectable
 
             return array_map(fn($meme) => $meme['id'], $memes->toArray());
         } catch (\Exception $e) {
-            error_log("Search error: " . $e->getMessage());
+            $this->logger->error(
+                'Search failed: ' . $e->getMessage(),
+                ['exception' => $e, 'query' => $query, 'language' => $language]
+            );
             return [];
         }
     }
@@ -226,10 +230,18 @@ class SearchService extends Injectable
      */
     public function delete(int $memeId)
     {
-        if (empty($memeId)) {
-            throw new \Exception('Missing meme ID');
+        try {
+            if (empty($memeId)) {
+                throw new \Exception('Missing meme ID');
+            }
+            $this->redisIndexing->delete("meme:{$memeId}");
+        } catch (\Exception $e) {
+            $this->logger->error(
+                'Failed to delete meme: ' . $e->getMessage(),
+                ['exception' => $e, 'memeId' => $memeId]
+            );
+            return;
         }
-        $this->redisIndexing->delete("meme:{$memeId}");
     }
 
     /**
@@ -249,36 +261,12 @@ class SearchService extends Injectable
                 ->fuzzy()
                 ->get($prefix, $limit);
         } catch (\Exception $e) {
-            error_log("Error getting suggestions: " . $e->getMessage());
-            throw $e;
+            $this->logger->error(
+                'Failed to get suggestions: ' . $e->getMessage(),
+                ['exception' => $e, 'prefix' => $prefix, 'language' => $language]
+            );
+            return [];
         }
-    }
-
-    /**
-     * Parse search results
-     */
-    private function parseSearchResults($results): array
-    {
-        if (empty($results)) {
-            return ['total' => 0, 'items' => []];
-        }
-
-        $items = [];
-        foreach ($results as $document) {
-            if (preg_match('/^meme:(\d+):(.*)$/', $document->id, $matches)) {
-                $items[] = [
-                    'id' => (int)$matches[1],
-                    'tag' => $document->tag,
-                    'tag_normalized' => $document->tag_normalized,
-                    'language' => $document->language
-                ];
-            }
-        }
-
-        return [
-            'total' => count($items),
-            'items' => $items
-        ];
     }
 
     /**

@@ -4,16 +4,14 @@ use App\Enums\CacheIndexesEnum;
 use App\Redis\Connector;
 use Ehann\RediSearch\Index;
 use Ehann\RediSearch\Suggestion;
-use Phalcon\Http\Message\StreamFactory;
 use Phalcon\Logger\AdapterFactory;
+use Phalcon\Logger\LoggerFactory;
 use Phalcon\Mvc\View;
 use Phalcon\Url;
 use Phalcon\Session\Adapter\Stream as SessionAdapter;
 use Phalcon\Session\Manager as SessionManager;
 use Phalcon\Http\Response\Cookies;
 use Phalcon\Logger\Adapter\Stream as FileLogger;
-use Phalcon\Logger\Adapter\StreamFactory as StreamLogger;
-use Phalcon\Logger\LoggerFactory;
 
 /**
  * Shared configuration service
@@ -110,15 +108,24 @@ $di->setShared('cookies', function () {
  * Logger service
  */
 $di->setShared('logger', function () {
-    $config = $this->getConfig();
+    // Create logs directory if it doesn't exist
+    $logPath = BASE_PATH . '/storage/logs';
+    if (!is_dir($logPath)) {
+        mkdir($logPath, 0777, true);
+    }
+
+    if (!file_exists($logPath . '/errors.log')) {
+        touch($logPath . '/errors.log');
+    }
+
+    $adapters = [
+        "main" => new FileLogger($logPath . '/errors.log')
+    ];
 
     $adapterFactory = new AdapterFactory();
-    $loggerFactory  = new LoggerFactory($adapterFactory);
-    return $loggerFactory->newInstance('logger', [
-        'main' => $loggerFactory->newInstance('main', [
-            'fileName' => $config->application->logPath,
-        ]),
-    ]);
+    $loggerFactory = new LoggerFactory($adapterFactory);
+
+    return $loggerFactory->newInstance('logger', $adapters);
 });
 
 /**
