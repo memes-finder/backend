@@ -13,14 +13,6 @@ class ReindexTagsTask extends Task
     {
         $searchService = $this->getDI()->get('searchService');
 
-        // Drop existing index but keep documents
-        try {
-            $this->dropIndex($searchService);
-            $this->println("Dropped existing index (keeping documents)");
-        } catch (\Exception $e) {
-            $this->println("No existing index found or error dropping index: " . $e->getMessage());
-        }
-
         // Get all tags
         $tags = Tags::find();
 

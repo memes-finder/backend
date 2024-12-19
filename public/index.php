@@ -31,39 +31,6 @@ $loader->registerDirs([
 // Create a DI
 $di = new FactoryDefault();
 
-// Setup the configuration
-$di->setShared('config', function () {
-    return new Config([
-        'database' => [
-            'host'     => $_ENV['DB_HOST'],
-            'username' => $_ENV['DB_USER'],
-            'password' => $_ENV['DB_PASSWORD'],
-            'dbname'   => $_ENV['DB_NAME'],
-        ],
-        'redis' => [
-            'host'     => $_ENV['REDIS_HOST'],
-            'port'     => $_ENV['REDIS_PORT'],
-            'password' => $_ENV['REDIS_PASSWORD'],
-        ],
-        'aws' => [
-            'key'    => $_ENV['AWS_ACCESS_KEY_ID'],
-            'secret' => $_ENV['AWS_SECRET_ACCESS_KEY'],
-            'bucket' => $_ENV['AWS_BUCKET_NAME'],
-            'region' => $_ENV['AWS_REGION'],
-        ],
-        'application' => [
-            'modelsDir'      => APP_PATH . '/Models/',
-            'controllersDir' => APP_PATH . '/Controllers/',
-            'servicesDir'    => APP_PATH . '/Services/',
-            'libraryDir'     => APP_PATH . '/Library/',
-            'tasksDir'       => APP_PATH . '/Tasks/',
-            'baseUri'        => '/',
-            'env'           => $_ENV['APP_ENV'] ?? 'production',
-            'debug'         => filter_var($_ENV['APP_DEBUG'] ?? false, FILTER_VALIDATE_BOOLEAN),
-        ]
-    ]);
-});
-
 // Register the configured services
 require APP_PATH . '/config/services.php';
 require APP_PATH . '/config/router.php';

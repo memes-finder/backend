@@ -10,7 +10,6 @@ use Phalcon\Mvc\View;
 use Phalcon\Url;
 use Phalcon\Session\Adapter\Stream as SessionAdapter;
 use Phalcon\Session\Manager as SessionManager;
-use Phalcon\Http\Response\Cookies;
 use Phalcon\Logger\Adapter\Stream as FileLogger;
 
 /**
@@ -129,25 +128,6 @@ $di->setShared('logger', function () {
 });
 
 /**
- * Register redis service
- */
-$di->setShared('redis', function () {
-    $config = $this->getConfig();
-
-    $redis = new Redis();
-    $redis->connect(
-        $config->redis->host,
-        $config->redis->port
-    );
-
-    if (!empty($config->redis->password)) {
-        $redis->auth($config->redis->password);
-    }
-
-    return $redis;
-});
-
-/**
  * Register Redis as a service
  */
 $di->set('cache', function(int $database = 0) {
@@ -163,7 +143,7 @@ $di->set('cache', function(int $database = 0) {
 });
 
 /**
- * RediSearch Index service
+ * RedisSearch indexing service
  */
 $di->setShared('redisIndex', function () {
     $redisIndex = new Index($this->getCache()['adapter'], 'idx:memes');
@@ -172,7 +152,7 @@ $di->setShared('redisIndex', function () {
 });
 
 /**
- * RediSearch Suggestion service
+ * RedisSearch Suggestion service
  */
 $di->setShared('redisSuggest', function () {
     return new Suggestion($this->getCache()['adapter']);

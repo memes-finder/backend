@@ -21,7 +21,7 @@ return new \Phalcon\Config([
     'redis' => [
         'host' => $_ENV['REDIS_HOST'] ?? 'redis',
         'port' => $_ENV['REDIS_PORT'] ?? 6379,
-        'password' => $_ENV['REDIS_PASSWORD'] ?? null
+        'auth' => $_ENV['REDIS_PASSWORD'] ?? null
     ],
     'aws' => [
         'key' => $_ENV['AWS_ACCESS_KEY_ID'] ?? null,
