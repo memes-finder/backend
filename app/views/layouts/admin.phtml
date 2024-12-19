@@ -23,9 +23,17 @@
             max-width: 200px;
             max-height: 200px;
             object-fit: contain;
+            transition: transform 0.2s;
+            cursor: pointer;
+        }
+        .meme-preview:hover {
+            transform: scale(1.05);
         }
         .tag-badge {
             margin: 2px;
+        }
+        #zoomImage {
+            max-height: 80vh;
         }
         /* Flash message styles */
         .errorMessage,
@@ -97,10 +105,25 @@
         </div>
     </div>
 
+    <!-- Image Zoom Modal -->
+    <div class="modal fade" id="imageZoomModal" tabindex="-1" aria-labelledby="imageZoomModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="imageZoomModalLabel">Meme Preview</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img src="" class="img-fluid" id="zoomImage" alt="Meme Preview">
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Handle meme approval
         document.addEventListener('DOMContentLoaded', function() {
+            // Handle meme approval
             document.querySelectorAll('.approve-meme').forEach(button => {
                 button.addEventListener('click', function() {
                     const memeId = this.getAttribute('data-meme-id');
@@ -139,6 +162,16 @@
                         alert('Error: Failed to approve meme');
                         button.disabled = false;
                     });
+                });
+            });
+
+            // Add zoom functionality
+            document.querySelectorAll('.meme-preview').forEach(img => {
+                img.addEventListener('click', function() {
+                    const modal = new bootstrap.Modal(document.getElementById('imageZoomModal'));
+                    const zoomImage = document.getElementById('zoomImage');
+                    zoomImage.src = this.src;
+                    modal.show();
                 });
             });
         });
