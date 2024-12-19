@@ -17,10 +17,10 @@ class AdminAuthMiddleware extends Injectable
 
         // Check if request has valid token in session
         $isLoggedIn = $this->session->has('admin_token') && 
-            $this->session->get('admin_token') === getenv('ADMIN_TOKEN');
+            $this->session->get('admin_token') === $_ENV['ADMIN_TOKEN'];
 
         if (!$isLoggedIn) {
-            $envToken = getenv('ADMIN_TOKEN');
+            $envToken = $_ENV['ADMIN_TOKEN'];
             if (!$envToken) {
                 $this->logger->error('ADMIN_TOKEN not set in environment');
             } else {

@@ -13,7 +13,7 @@ class AdminController extends ControllerBase
         
         // Set isLoggedIn flag for view
         $this->view->isLoggedIn = $this->session->has('admin_token') && 
-            $this->session->get('admin_token') === getenv('ADMIN_TOKEN');
+            $this->session->get('admin_token') === $_ENV['ADMIN_TOKEN'];
         
         // Add admin layout
         $this->view->setLayout('admin');
@@ -316,13 +316,13 @@ class AdminController extends ControllerBase
         
         // Check if already logged in
         if ($this->session->has('admin_token') && 
-            $this->session->get('admin_token') === getenv('ADMIN_TOKEN')) {
+            $this->session->get('admin_token') === $_ENV['ADMIN_TOKEN']) {
             return $this->response->redirect('/admin');
         }
         
         if ($this->request->isPost()) {
             $inputToken = $this->request->getPost('token');
-            $envToken = getenv('ADMIN_TOKEN');
+            $envToken = $_ENV['ADMIN_TOKEN'];
             
             if ($inputToken === $envToken) {
                 // Store token in session
