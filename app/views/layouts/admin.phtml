@@ -98,5 +98,50 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Handle meme approval
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.approve-meme').forEach(button => {
+                button.addEventListener('click', function() {
+                    const memeId = this.getAttribute('data-meme-id');
+                    const button = this;
+                    
+                    // Disable button while processing
+                    button.disabled = true;
+                    
+                    fetch(`/admin/meme/${memeId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: 'action=approve'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Update the status badge
+                            const card = button.closest('.card');
+                            const statusBadge = card.querySelector('.badge');
+                            statusBadge.textContent = 'Approved';
+                            statusBadge.classList.remove('bg-warning');
+                            statusBadge.classList.add('bg-success');
+                            
+                            // Remove the approve button
+                            button.remove();
+                        } else {
+                            alert('Error: ' + (data.message || 'Failed to approve meme'));
+                            button.disabled = false;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error: Failed to approve meme');
+                        button.disabled = false;
+                    });
+                });
+            });
+        });
+    </script>
 </body>
 </html>

@@ -108,11 +108,25 @@ class AdminController extends ControllerBase
             }
 
             if ($meme->save()) {
+                // If it's an AJAX request, return JSON response
+                if ($this->request->isAjax()) {
+                    return $this->response
+                        ->setStatusCode(200)
+                        ->setJsonContent(['success' => true]);
+                }
                 $this->flash->success('Meme updated successfully');
             } else {
                 $messages = [];
                 foreach ($meme->getMessages() as $message) {
                     $messages[] = $message->getMessage();
+                }
+                // If it's an AJAX request, return JSON response
+                if ($this->request->isAjax()) {
+                    return $this->response
+                        ->setJsonContent([
+                            'success' => false,
+                            'message' => implode(', ', $messages)
+                        ]);
                 }
                 $this->flash->error(implode(', ', $messages));
             }

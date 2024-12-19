@@ -68,6 +68,11 @@
                             <a href="/admin/tags/<?= $meme['id'] ?>" class="btn btn-info btn-sm">
                                 <i class="fas fa-tags"></i> Manage Tags
                             </a>
+                            <?php if ($meme['status'] !== 'approved'): ?>
+                            <button type="button" class="btn btn-success btn-sm approve-meme" data-meme-id="<?= $meme['id'] ?>">
+                                <i class="fas fa-check"></i> Approve
+                            </button>
+                            <?php endif; ?>
                             <a href="/admin/delete/<?= $meme['id'] ?>" 
                                class="btn btn-danger btn-sm"
                                onclick="return confirm('Are you sure you want to delete this meme?');">
