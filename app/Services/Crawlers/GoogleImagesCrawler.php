@@ -170,7 +170,8 @@ class GoogleImagesCrawler extends CrawlerService
                 'q' => $query,
                 'lr' => $language === 'ar' ? 'lang_ar' : 'lang_en',
                 'gl' => $language === 'ar' ? 'JO' : 'US',
-                'start' => ($page - 1) * self::ITEMS_PER_PAGE + 1
+                'start' => ($page - 1) * self::ITEMS_PER_PAGE + 1,
+                'filter' => 1
             ];
 
             $results = $this->searchService->cse->listCse($optParams);

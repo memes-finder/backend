@@ -12,14 +12,22 @@ class RegenerateTagsTask extends Task
     {
         $this->println("Starting AI tag regeneration...");
 
-        // Get all memes
+        // Get memes that don't have AI-generated tags
         $memes = Memes::find([
-            'conditions' => 'status = :status:',
-            'bind' => ['status' => Memes::STATUS_APPROVED]
+            'conditions' => 'id IN (
+                SELECT meme_id
+                FROM \App\Models\MemeTags
+                GROUP BY meme_id
+                HAVING COUNT(DISTINCT \App\Models\MemeTags.id) < 5
+            ) AND status = :status:',
+            'bind' => [
+                'status' => Memes::STATUS_APPROVED
+            ]
         ]);
 
+
         $total = count($memes);
-        $this->println("Found {$total} memes to process");
+        $this->println("Found {$total} memes without AI tags to process");
 
         /** @var \App\Services\AITaggingService $aiService */
         $aiService = $this->getDI()->get('aiTaggingService');
@@ -30,15 +38,7 @@ class RegenerateTagsTask extends Task
         foreach ($memes as $meme) {
             try {
                 $processed++;
-                $this->println("Processing meme {$meme->id} ({$processed}/{$total})");
-
-                // Delete existing AI-generated tags
-                MemeTags::find([
-                    'conditions' => 'meme_id = :meme_id:',
-                    'bind' => [
-                        'meme_id' => $meme->id
-                    ]
-                ])->delete();
+                $this->println("Processing meme $meme->id ($processed/$total)");
 
                 // Generate new tags
                 $tags = $aiService->generateTags($meme->getPublicUrl());
@@ -71,6 +71,7 @@ class RegenerateTagsTask extends Task
                     }
                 }
 
+                $processed++;
                 $this->println("Successfully processed meme {$meme->id}");
 
                 // Add a small delay to avoid rate limiting
