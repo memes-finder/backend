@@ -74,14 +74,17 @@
             <div class="col-md-2 sidebar">
                 <h3 class="mb-4">Admin Panel</h3>
                 <div class="list-group">
-                    <a href="/admin" class="list-group-item list-group-item-action">
-                        <i class="fas fa-image me-2"></i> Memes
+                    <a href="/admin" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center <?= empty($status) ? 'active' : '' ?>">
+                        <span><i class="fas fa-image me-2"></i> All Memes</span>
+                        <span class="badge <?= empty($status) ? 'bg-light text-dark' : 'bg-secondary' ?> rounded-pill"><?= $memeCounts['total'] ?? 0 ?></span>
                     </a>
-                    <a href="/admin?status=pending" class="list-group-item list-group-item-action">
-                        <i class="fas fa-clock me-2"></i> Pending
+                    <a href="/admin?status=pending" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center <?= $status === 'pending' ? 'active' : '' ?>">
+                        <span><i class="fas fa-clock me-2"></i> Pending</span>
+                        <span class="badge <?= $status === 'pending' ? 'bg-light text-dark' : 'bg-warning' ?> rounded-pill"><?= $memeCounts['pending'] ?? 0 ?></span>
                     </a>
-                    <a href="/admin?status=approved" class="list-group-item list-group-item-action">
-                        <i class="fas fa-check me-2"></i> Approved
+                    <a href="/admin?status=approved" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center <?= $status === 'approved' ? 'active' : '' ?>">
+                        <span><i class="fas fa-check me-2"></i> Approved</span>
+                        <span class="badge <?= $status === 'approved' ? 'bg-light text-dark' : 'bg-success' ?> rounded-pill"><?= $memeCounts['approved'] ?? 0 ?></span>
                     </a>
                     <a href="/admin/logout" class="list-group-item list-group-item-action">
                         <i class="fas fa-sign-out-alt me-2"></i> Logout

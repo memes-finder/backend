@@ -19,6 +19,16 @@ class AdminController extends ControllerBase
         $this->view->setLayout('admin');
         $this->view->title = 'Admin Panel';
         $this->view->flash = $this->flash;
+
+        // Get meme counts by status
+        if ($this->view->isLoggedIn) {
+            $counts = [
+                'total' => Memes::count(),
+                'pending' => Memes::count(['conditions' => 'status = "pending"']),
+                'approved' => Memes::count(['conditions' => 'status = "approved"'])
+            ];
+            $this->view->memeCounts = $counts;
+        }
     }
 
     public function indexAction()
