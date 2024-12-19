@@ -34,7 +34,10 @@ class AITaggingService
                         'content' => [
                             [
                                 'type' => 'text',
-                                'text' => 'Analyze a meme image to extract concise and relevant keywords each in English and Arabic, describing its visual content, text, context, emotions and humor, while outputting the results in JSON format {"en": [], "ar": []}. If the image contains celebrities, include their names in the tags.'
+                                'text' => 'Analyze a meme image to extract concise and relevant keywords each in English and Arabic,
+                                            describing its visual content, text, context, emotions and humor,
+                                             while outputting the results in JSON format {"en": [], "ar": []}. 
+                                             If the image contains celebrities, include their names in the tags and put them at first.'
                             ],
                             [
                                 'type' => 'image_url',
