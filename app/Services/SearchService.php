@@ -185,8 +185,8 @@ class SearchService extends Injectable
 
             // Use RediSearch's %% operator for stemming
             $searchQuery = '@tag:(' . implode('|', array_map(function($term) {
-                return '~' . addslashes($term);  // Add %% for stemming
-            }, $searchTerms)) . ') @tag_normalized:(~' . $normalizedQuery . ')';
+                return '~' . addslashes($term);
+            }, $searchTerms)) . ') @tag_normalized:(' . $normalizedQuery . ')';
 
             $results = $this->redisIndexing->search($searchQuery, true);
             
