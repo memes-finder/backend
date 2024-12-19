@@ -7,7 +7,6 @@ use App\Models\CrawlerState;
 use App\Models\Memes;
 use Google\Client;
 use Google\Service\CustomSearchAPI;
-use GuzzleHttp\Exception\GuzzleException;
 
 class GoogleImagesCrawler extends CrawlerService
 {
@@ -19,13 +18,6 @@ class GoogleImagesCrawler extends CrawlerService
     ];
     private const DAILY_LIMIT = 500;
     private const ITEMS_PER_PAGE = 10;
-
-    private $stats = [
-        'total_processed' => 0,
-        'total_saved' => 0,
-        'total_skipped' => 0,
-        'total_errors' => 0,
-    ];
 
     public function __construct()
     {

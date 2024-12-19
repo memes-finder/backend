@@ -14,10 +14,15 @@ abstract class CrawlerService
 {
     protected Client $httpClient;
     protected S3Client $s3Client;
-    protected AITaggingService $aiTagger;
     protected string $sourceName;
     protected $config;
-    protected $di;
+
+    protected array $stats = [
+        'total_processed' => 0,
+        'total_saved' => 0,
+        'total_skipped' => 0,
+        'total_errors' => 0
+    ];
 
     public function __construct()
     {
@@ -25,7 +30,6 @@ abstract class CrawlerService
         $this->config = $this->di->get('config');
         
         $this->httpClient = new Client();
-        $this->aiTagger = $this->di->get('aiTaggingService');
         
         $this->s3Client = new S3Client([
             'version' => 'latest',
@@ -36,6 +40,11 @@ abstract class CrawlerService
             ]
         ]);
     }
+
+    /**
+     * Abstract method to be implemented by specific crawlers
+     */
+    abstract public function crawl(): void;
 
     /**
      * Save meme to storage and database
@@ -109,10 +118,8 @@ abstract class CrawlerService
                 throw new Exception('Failed to save meme record: ' . implode(', ', $meme->getMessages()));
             }
 
-            // Save tags
-            $now = date('Y-m-d H:i:s');
-            
             // Save original language tags
+            $now = date('Y-m-d H:i:s');
             foreach ($tags as $tag => $confidence) {
                 $memeTag = new MemeTags();
                 $memeTag->meme_id = $meme->id;
@@ -132,45 +139,10 @@ abstract class CrawlerService
                 );
             }
 
-            // Generate AI tags if enabled
-            try {
-                $aiTags = $this->aiTagger->generateTags($imageUrl);
-                
-                // Save AI-generated tags
-                foreach ($aiTags as $lang => $langTags) {
-                    foreach ($langTags as $tag) {
-                        $memeTag = new MemeTags();
-                        $memeTag->meme_id = $meme->id;
-                        $memeTag->tag = $tag;
-                        $memeTag->language = $lang === 'ar' ? 'arabic' : 'english';
-                        $memeTag->confidence = 0.9; // AI tags get high confidence
-                        $memeTag->created_at = $now;
-                        $memeTag->save();
-
-                        // Index in RedisSearch
-                        $this->di->get('searchService')->indexTag(
-                            $meme->id,
-                            $tag,
-                            $lang,
-                            0.9, // AI tags get high confidence
-                            $now
-                        );
-                    }
-                }
-            } catch (Exception $e) {
-                error_log('Error generating AI tags: ' . $e->getMessage());
-                // Continue even if AI tagging fails
-            }
-
             return $meme;
         } catch (Exception $e) {
             error_log('Error saving meme: ' . $e->getMessage());
             return null;
         }
     }
-
-    /**
-     * Abstract method to be implemented by specific crawlers
-     */
-    abstract public function crawl(): void;
 }
