@@ -186,18 +186,6 @@ class GoogleImagesCrawler extends CrawlerService
                         $imageContent = $response->getBody()->getContents();
                         $imageHash = md5($imageContent);
 
-                        // Check if meme with this source URL already exists
-                        $existingMeme = Memes::findFirst([
-                            'conditions' => 'source_url = :url: OR file_hash = :hash:',
-                            'bind' => ['url' => $item->getLink(), 'hash' => $imageHash]
-                        ]);
-
-                        if ($existingMeme) {
-                            echo "✓ Skipping duplicate meme from URL: {$item->getLink()}\n";
-                            $this->stats['total_skipped']++;
-                            continue;
-                        }
-
                         // Extract tags from title and snippet
                         $tags = array_unique(array_merge(
                             $this->extractTags($item->getTitle(), $language),

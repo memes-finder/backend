@@ -52,12 +52,17 @@ class Memes extends Model
     /**
      * @var string|null
      */
+    public $source_url_hash;
+
+    /**
+     * @var string|null
+     */
     public $file_hash;
 
     /**
      * @var string
      */
-    public $status;
+    public $status = self::STATUS_PENDING;
 
     /**
      * @var string
@@ -103,6 +108,10 @@ class Memes extends Model
         // Set default status if not set
         if (empty($this->status)) {
             $this->status = self::STATUS_PENDING;
+        }
+
+        if ($this->source_url && empty($this->source_url_hash)) {
+            $this->source_url_hash = md5($this->source_url);
         }
     }
 
