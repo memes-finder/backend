@@ -27,7 +27,7 @@ class AITaggingService
     {
         try {
             $response = $this->openaiClient->chat([
-                'model' => 'gpt-4o-mini',
+                'model' => 'gpt-4-turbo',
                 'messages' => [
                     [
                         'role' => 'user',
@@ -52,8 +52,8 @@ class AITaggingService
 
             // Validate and ensure we have exactly MAX_TAGS tags for each language
             return [
-                'en' => array_slice($this->validateTags($tags['en'] ?? []), 0, self::MAX_TAGS),
-                'ar' => array_slice($this->validateTags($tags['ar'] ?? []), 0, self::MAX_TAGS)
+                'en' => $this->validateTags($tags['en'] ?? []),
+                'ar' => $this->validateTags($tags['ar'] ?? [])
             ];
         } catch (Exception $e) {
             // Log the error
