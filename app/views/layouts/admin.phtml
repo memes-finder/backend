@@ -62,7 +62,7 @@
 <body>
     <div class="container-fluid">
         <div class="row">
-            <!-- Sidebar -->
+            <?php if ($isLoggedIn): ?>
             <div class="col-md-2 sidebar">
                 <h3 class="mb-4">Admin Panel</h3>
                 <div class="list-group">
@@ -75,19 +75,24 @@
                     <a href="/admin?status=approved" class="list-group-item list-group-item-action">
                         <i class="fas fa-check me-2"></i> Approved
                     </a>
+                    <a href="/admin/logout" class="list-group-item list-group-item-action">
+                        <i class="fas fa-sign-out-alt me-2"></i> Logout
+                    </a>
                 </div>
             </div>
-
-            <!-- Main Content -->
-            <div class="col-md-10 content">
-                <?php
-                    $flash = $this->flash;
-                    if ($flash) {
-                        echo $flash->output();
-                    }
-                ?>
-
-                <?= $this->getContent() ?>
+            <div class="col-md-10">
+            <?php else: ?>
+            <div class="col-md-12">
+            <?php endif; ?>
+                <div class="content">
+                    <?php
+                        $flash = $this->flash;
+                        if ($flash) {
+                            echo $flash->output();
+                        }
+                    ?>
+                    <?= $this->getContent() ?>
+                </div>
             </div>
         </div>
     </div>

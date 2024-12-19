@@ -96,10 +96,10 @@ $di->setShared('flash', function () {
 });
 
 /**
- * Register the cookies service
+ * Register cookies service
  */
 $di->setShared('cookies', function () {
-    $cookies = new Cookies();
+    $cookies = new \Phalcon\Http\Response\Cookies();
     $cookies->useEncryption(false);
     return $cookies;
 });
@@ -186,4 +186,40 @@ $di->setShared('searchService', function () {
 // Register AITaggingService
 $di->setShared('aiTaggingService', function () {
     return new \App\Services\AITaggingService();
+});
+
+/**
+ * Register dispatcher service with admin auth middleware
+ */
+$di->setShared('dispatcher', function () {
+    $dispatcher = new \Phalcon\Mvc\Dispatcher();
+    $dispatcher->setDefaultNamespace('App\Controllers');
+    
+    // Create an event manager
+    $eventsManager = new \Phalcon\Events\Manager();
+    
+    // Get DI container
+    $container = $this;
+    
+    // Attach the middleware for admin routes
+    $eventsManager->attach(
+        'dispatch:beforeExecuteRoute',
+        function($event, $dispatcher) use ($container) {
+            $controllerName = $dispatcher->getControllerName();
+            
+            // Apply middleware only to admin routes
+            if ($controllerName === 'admin') {
+                $middleware = new \App\Middleware\AdminAuthMiddleware();
+                $middleware->setDI($container);
+                return $middleware->beforeExecuteRoute();
+            }
+            
+            return true;
+        }
+    );
+    
+    // Bind the events manager to the dispatcher
+    $dispatcher->setEventsManager($eventsManager);
+    
+    return $dispatcher;
 });

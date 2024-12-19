@@ -10,6 +10,11 @@ class AdminController extends ControllerBase
     public function initialize()
     {
         parent::initialize();
+        
+        // Set isLoggedIn flag for view
+        $this->view->isLoggedIn = $this->session->has('admin_token') && 
+            $this->session->get('admin_token') === getenv('ADMIN_TOKEN');
+        
         // Add admin layout
         $this->view->setLayout('admin');
         $this->view->title = 'Admin Panel';
@@ -302,5 +307,39 @@ class AdminController extends ControllerBase
         }
 
         return $this->response->redirect("/admin/tags/{$memeId}");
+    }
+
+    public function loginAction()
+    {
+        // Set empty layout for login page
+        $this->view->setLayout('');
+        
+        // Check if already logged in
+        if ($this->session->has('admin_token') && 
+            $this->session->get('admin_token') === getenv('ADMIN_TOKEN')) {
+            return $this->response->redirect('/admin');
+        }
+        
+        if ($this->request->isPost()) {
+            $inputToken = $this->request->getPost('token');
+            $envToken = getenv('ADMIN_TOKEN');
+            
+            if ($inputToken === $envToken) {
+                // Store token in session
+                $this->session->set('admin_token', $inputToken);
+                return $this->response->redirect('/admin');
+            }
+            
+            $this->flash->error('Invalid admin token');
+            $this->logger->warning('Invalid admin login attempt', [
+                'ip' => $this->request->getClientAddress()
+            ]);
+        }
+    }
+
+    public function logoutAction()
+    {
+        $this->session->remove('admin_token');
+        return $this->response->redirect('/admin/login');
     }
 }

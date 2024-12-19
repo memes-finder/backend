@@ -24,6 +24,16 @@ $router->add('/api/crawl', [
 ])->via(['POST']);
 
 // Admin routes
+$router->add('/admin/login', [
+    'controller' => 'admin',
+    'action' => 'login'
+])->via(['GET', 'POST']);
+
+$router->add('/admin/logout', [
+    'controller' => 'admin',
+    'action' => 'logout'
+]);
+
 $router->add('/admin', [
     'controller' => 'admin',
     'action' => 'index'
