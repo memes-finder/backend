@@ -6,6 +6,7 @@
     <title><?= $title ?? 'Memes Planet' ?></title>
 
     <!-- Open Graph / Facebook -->
+    <meta property="fb:app_id" content="<?=$facebookAppId ?? '' ?>">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://memesplanet.com<?= $this->request->getURI() ?>">
     <meta property="og:title" content="<?= $title ?? 'Memes Planet' ?>">
