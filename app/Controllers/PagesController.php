@@ -6,6 +6,12 @@ use Phalcon\Mvc\Controller;
 
 class PagesController extends Controller
 {
+    public function initialize()
+    {
+        // Set Facebook App ID from environment variable for all views
+        $this->view->setVar('facebookAppId', $_ENV['FACEBOOK_APP_ID']);
+    }
+
     /**
      * Index page
      */
