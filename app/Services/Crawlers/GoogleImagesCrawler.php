@@ -182,7 +182,7 @@ class GoogleImagesCrawler extends CrawlerService
                 'gl' => $language === 'ar' ? 'JO' : 'US',
                 'start' => ($page - 1) * self::ITEMS_PER_PAGE + 1,
                 'filter' => 1,
-                'siteSearch' => 'facebook.com instagram.com',
+                'siteSearch' => 'facebook.com instagram.com tiktok.com',
                 'siteSearchFilter' => 'e', // Exclude siteSearch
             ];
 
