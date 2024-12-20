@@ -60,6 +60,7 @@ abstract class CrawlerService
     protected function saveMeme(
         string $imageUrl,
         array $tags,
+        string $tagsOrigin,
         string $language,
         ?string $imageContent = null,
         ?string $imageHash = null
@@ -127,6 +128,7 @@ abstract class CrawlerService
                 $memeTag->language = $language === 'ar' ? 'arabic' : 'english';
                 $memeTag->confidence = $confidence;
                 $memeTag->created_at = $now;
+                $memeTag->origin = $tagsOrigin;
                 $memeTag->save();
 
                 // Index in RedisSearch

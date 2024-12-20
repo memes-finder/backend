@@ -163,11 +163,6 @@ $di->setShared('searchService', function () {
     return new \App\Services\SearchService();
 });
 
-// Register AITaggingService
-$di->setShared('aiTaggingService', function () {
-    return new \App\Services\AITaggingService();
-});
-
 /**
  * Register dispatcher service with admin auth middleware
  */

@@ -2,6 +2,7 @@
 
 namespace App\Services\TaggingServices;
 
+use App\Models\MemeTags;
 use Orhanerday\OpenAi\OpenAi;
 use App\Services\TaggingServices\Traits\TagExtractionTrait;
 use Phalcon\Di;
@@ -18,6 +19,15 @@ class OpenAITaggingService extends AbstractTaggingService
     {
         $this->apiKey = Di::getDefault()->get('config')->openai->api_key;
         $this->openaiClient = new OpenAI($this->apiKey);
+    }
+
+    /**
+     * Get the origin identifier for this service
+     * @return string
+     */
+    public function getOrigin(): string
+    {
+        return MemeTags::ORIGIN_OPENAI;
     }
 
     /**

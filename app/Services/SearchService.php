@@ -155,38 +155,67 @@ class SearchService extends Injectable
     }
 
     /**
-     * Search memes by tag
+     * Search memes by query text and tags
      *
-     * @param string $query
+     * @param string|null $query Text query
+     * @param array|null $tags Array of tags to search for
      * @param string|null $language
      * @param int $limit
      * @param int $offset
      * @param string $status If true, includes all memes regardless of status
      * @return array
      */
-    public function search(string $query, string $language = null, int $limit = 10, int $offset = 0, string $status = ''): array
+    public function search(?string $query, ?array $tags = [], string $language = null, int $limit = 10, int $offset = 0, string $status = ''): array
     {
         try {
             // Ensure index exists with stemming
             $this->ensureIndex();
 
-            // For Arabic text, apply normalization and use multiple search terms
-            if (preg_match('/\p{Arabic}/u', $query)) {
-                $normalizedQuery = $this->normalizeArabicText($query);
-            } else {
-                $normalizedQuery = $this->normalizeTag($query);
+            $searchParts = [];
+
+            // Add text query if provided
+            if (!empty($query)) {
+                // For Arabic text, apply normalization
+                if (preg_match('/\p{Arabic}/u', $query)) {
+                    $normalizedQuery = $this->normalizeArabicText($query);
+                } else {
+                    $normalizedQuery = $this->normalizeTag($query);
+                }
+
+                // Build text search query with multiple variations and stemming
+                $searchTerms = [
+                    $query,              // Exact match
+                    $normalizedQuery . '*' // Normalized prefix match
+                ];
+
+                $searchParts[] = '@tag:(' . implode('|', array_map(function($term) {
+                    return '~' . addslashes($term);
+                }, $searchTerms)) . ') @tag_normalized:(' . $normalizedQuery . ')';
             }
 
-            // Build search query with multiple variations and stemming
-            $searchTerms = [
-                $query,              // Exact match
-                $normalizedQuery . '*' // Normalized prefix match
-            ];
+            // Add tag search if provided
+            if (!empty($tags)) {
+                $tagQueries = [];
+                foreach ($tags as $tag) {
+                    // Normalize tag based on language
+                    if (preg_match('/\p{Arabic}/u', $tag)) {
+                        $normalizedTag = $this->normalizeArabicText($tag);
+                    } else {
+                        $normalizedTag = $this->normalizeTag($tag);
+                    }
 
-            // Use RediSearch's %% operator for stemming
-            $searchQuery = '@tag:(' . implode('|', array_map(function($term) {
-                return '~' . addslashes($term);
-            }, $searchTerms)) . ') @tag_normalized:(' . $normalizedQuery . ')';
+                    $tagQueries[] = '@tag:(~' . addslashes($tag) . ') | @tag_normalized:(~' . $normalizedTag . ')';
+                }
+                $searchParts[] = '(' . implode(' | ', $tagQueries) . ')';
+            }
+
+            // If no search criteria provided, return empty result
+            if (empty($searchParts)) {
+                return [];
+            }
+
+            // Combine all search parts with AND operator
+            $searchQuery = implode(' & ', $searchParts);
 
             $results = $this->redisIndexing->search($searchQuery, true);
             
@@ -224,7 +253,7 @@ class SearchService extends Injectable
         } catch (\Exception $e) {
             $this->logger->error(
                 'Search failed: ' . $e->getMessage(),
-                ['exception' => $e, 'query' => $query, 'language' => $language]
+                ['exception' => $e, 'query' => $query, 'tags' => $tags, 'language' => $language]
             );
             return [];
         }

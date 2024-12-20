@@ -2,13 +2,14 @@
 
 namespace App\Services\TaggingServices;
 
+use App\Models\MemeTags;
 use Google\Cloud\Vision\V1\ImageAnnotatorClient;
 use Google\Cloud\Vision\V1\Feature\Type;
 use Google\Cloud\Vision\V1\Image;
 use Google\Cloud\Vision\V1\Feature;
+use Google\Cloud\Vision\V1\ImageSource;
 use Google\Cloud\Translate\V2\TranslateClient;
 use App\Services\TaggingServices\Traits\TagExtractionTrait;
-use Google\Cloud\Vision\V1\ImageSource;
 use Phalcon\Di;
 use Exception;
 
@@ -25,13 +26,22 @@ class GoogleVisionTaggingService extends AbstractTaggingService
         
         // Configure Vision API with API key
         $this->visionClient = new ImageAnnotatorClient([
-            'key' => $config->api_key
+            'credentials' => $config->service_account
         ]);
 
         // Configure Translate API with same API key
         $this->translateClient = new TranslateClient([
             'key' => $config->api_key
         ]);
+    }
+
+    /**
+     * Get the origin identifier for this service
+     * @return string
+     */
+    public function getOrigin(): string
+    {
+        return MemeTags::ORIGIN_GOOGLE_VISION;
     }
 
     /**
@@ -43,7 +53,7 @@ class GoogleVisionTaggingService extends AbstractTaggingService
     {
         try {
             $imageSource = new ImageSource();
-            $imageSource->setImageUri(base64_encode(file_get_contents($imageUrl)));
+            $imageSource->setImageUri($imageUrl);
 
             // Create image object
             $image = (new Image())
@@ -72,7 +82,7 @@ class GoogleVisionTaggingService extends AbstractTaggingService
                     $tags = array_merge($tags, $this->extractTags($label->getLabel()));
                 }
                 foreach ($webDetection->getWebEntities() as $entity) {
-                    if ($entity->getScore() > 0.7) {
+                    if ($entity->getScore() >= 0.5) {
                         $tags = array_merge($tags, $this->extractTags($entity->getDescription()));
                     }
                 }
@@ -82,22 +92,28 @@ class GoogleVisionTaggingService extends AbstractTaggingService
             $textAnnotations = $response->getTextAnnotations();
             if (!empty($textAnnotations)) {
                 $fullText = $textAnnotations[0]->getDescription();
+                $fullText = $this->filterTag($fullText);
                 $tags = array_merge($tags, $this->extractTags($fullText));
             }
 
             // Clean and validate English tags
-            $enTags = $this->validateTags(array_unique($tags));
+            $enTags = array_unique(array_merge($tags, $this->validateTags(array_unique($tags))));
 
             // Translate to Arabic
             $arTags = [];
-            foreach ($enTags as $tag) {
-                try {
-                    $result = $this->translateClient->translate($tag, [
-                        'target' => 'ar'
-                    ]);
-                    $arTags = array_merge($arTags, $this->extractTags($result['text'], 'ar'));
-                } catch (Exception $e) {
-                    error_log("Error translating tag '{$tag}': " . $e->getMessage());
+            foreach ($enTags as $index => $tag) {
+                if (!preg_match('/\p{Arabic}/u', $tag)) {
+                    try {
+                        $result = $this->translateClient->translate($tag, [
+                            'target' => 'ar'
+                        ]);
+                        $arTags = array_merge($arTags, $this->extractTags($result['text'], 'ar'));
+                    } catch (Exception $e) {
+                        error_log("Error translating tag '{$tag}': " . $e->getMessage());
+                    }
+                } else {
+                    unset($enTags[$index]);
+                    $arTags[] = $tag;
                 }
             }
 

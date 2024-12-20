@@ -37,15 +37,24 @@ class ApiController extends Controller
     public function searchAction()
     {
         try {
-            $query = $this->request->getQuery('q', 'string');
+            $query = $this->request->getQuery('q', 'string', '');
+            $tags = $this->request->getQuery('tags', 'string', '');
             $page = $this->request->getQuery('page', 'int', 1);
             $limit = $this->request->getQuery('limit', 'int', 20);
 
-            if (empty($query)) {
+            // Parse tags if provided
+            $tagArray = [];
+            if (!empty($tags)) {
+                $tagArray = array_map('trim', explode(',', $tags));
+                $tagArray = array_filter($tagArray); // Remove empty tags
+            }
+
+            // Require at least a query or tags
+            if (empty($query) && empty($tagArray)) {
                 return $this->response->setJsonContent([
                     'status' => 'error',
-                    'message' => 'Query parameter is required'
-                ]);
+                    'message' => 'Either query (q) or tags parameter is required'
+                ])->setStatusCode(400);
             }
 
             // Get language from header for response formatting
@@ -54,6 +63,7 @@ class ApiController extends Controller
             // Log search query
             $searchLog = new SearchLogs();
             $searchLog->query = $query;
+            $searchLog->tags = implode(',', $tagArray);
             $searchLog->language = $responseLanguage;
             $searchLog->save();
 
@@ -62,10 +72,9 @@ class ApiController extends Controller
 
             /** @var SearchService $searchService */
             $searchService = $this->di->get('searchService');
-            $memeIds = $searchService->search($query, $responseLanguage, $limit, $offset, Memes::STATUS_APPROVED);
+            $memeIds = $searchService->search($query, $tagArray, $responseLanguage, $limit, $offset, Memes::STATUS_APPROVED);
 
             // Get meme details
-//            $memeIds = array_column($results['items'], 'meme_id');
             if ($memeIds) {
                 /** @var Memes[] $memes */
                 $memes = Memes::find([
@@ -79,8 +88,8 @@ class ApiController extends Controller
             $formattedResults = [];
             foreach ($memes as $meme) {
                 // Get tags in both languages but prioritize response language
-                $primaryTags = array_column($meme->getTagsByLanguage('arabic')->toArray(), 'tag');
-                $secondaryTags = array_column($meme->getTagsByLanguage('english')->toArray(), 'tag');
+                $primaryTags = array_column($meme->getTagsByLanguage($responseLanguage === 'ar' ? 'arabic' : 'english')->toArray(), 'tag');
+                $secondaryTags = array_column($meme->getTagsByLanguage($responseLanguage === 'ar' ? 'english' : 'arabic')->toArray(), 'tag');
 
                 $formattedResults[] = [
                     'id' => $meme->id,
@@ -112,7 +121,7 @@ class ApiController extends Controller
             return $this->response->setJsonContent([
                 'status' => 'error',
                 'message' => 'An error occurred while processing your request'
-            ]);
+            ])->setStatusCode(500);
         }
     }
 
@@ -155,7 +164,7 @@ class ApiController extends Controller
             return $this->response->setJsonContent([
                 'status' => 'error',
                 'message' => 'An error occurred while processing your request'
-            ]);
+            ])->setStatusCode(500);
         }
     }
 

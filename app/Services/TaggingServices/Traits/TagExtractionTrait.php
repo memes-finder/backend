@@ -35,4 +35,17 @@ trait TagExtractionTrait
         // Remove empty strings and duplicates
         return array_values(array_unique(array_filter($cleanedWords)));
     }
+
+    /**
+     * Remove any special character and keep spaces only
+     *
+     * @param $string
+     * @return string
+     */
+    protected function filterTag($string): string
+    {
+        // Normalize spaces and remove duplicates
+        $normalizedString = preg_replace('/\s+/u', ' ', $string);
+        return trim($normalizedString);
+    }
 }

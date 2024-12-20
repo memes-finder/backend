@@ -6,11 +6,43 @@ use Phalcon\Mvc\Model;
 
 class MemeTags extends Model
 {
+    public const ORIGIN_MANUAL = 'manual';
+    public const ORIGIN_OPENAI = 'openai';
+    public const ORIGIN_GOOGLE_VISION = 'google_vision';
+
+    /**
+     * @var integer
+     */
     public $id;
+
+    /**
+     * @var integer
+     */
     public $meme_id;
+
+    /**
+     * @var string
+     */
     public $tag;
+
+    /**
+     * @var string
+     */
     public $language;
+
+    /**
+     * @var float
+     */
     public $confidence;
+
+    /**
+     * @var string
+     */
+    public $origin;
+
+    /**
+     * @var string
+     */
     public $created_at;
 
     public function initialize()
@@ -24,6 +56,9 @@ class MemeTags extends Model
                 'reusable' => true
             ]
         );
+
+        // Set default values
+        $this->origin = self::ORIGIN_MANUAL;
     }
 
     /**

@@ -22,10 +22,15 @@
                             <div class="card">
                                 <div class="card-header d-flex justify-content-between align-items-center">
                                     <h5 class="mb-0">Add New Tag</h5>
-                                    <a href="/admin/tags/generate/<?= $meme->id ?>" 
-                                       class="btn btn-success"
+                                    <a href="/admin/tags/generate/<?= $meme->id ?>?service=openai"
+                                       class="btn btn-sm btn-success"
                                        onclick="return confirm('This will generate new tags using AI. Continue?');">
-                                        <i class="fas fa-robot"></i> Generate Tags with AI
+                                        <i class="fas fa-robot"></i> Generate Tags with OpenAI
+                                    </a>
+                                    <a href="/admin/tags/generate/<?= $meme->id ?>?service=google_vision"
+                                       class="btn btn-sm btn-primary"
+                                       onclick="return confirm('This will generate new tags using AI. Continue?');">
+                                        <i class="fa fa-brands fa-google"></i> Generate Tags with Google Vision
                                     </a>
                                 </div>
                                 <div class="card-body">

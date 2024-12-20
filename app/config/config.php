@@ -31,7 +31,8 @@ return new \Phalcon\Config([
     ],
     'google' => [
         'api_key' => $_ENV['GOOGLE_API_KEY'] ?? null,
-        'cx' => $_ENV['GOOGLE_CX'] ?? null
+        'cx' => $_ENV['GOOGLE_CX'] ?? null,
+        'service_account' => BASE_PATH . '/' . $_ENV['GOOGLE_APPLICATION_CREDENTIALS']
     ],
     'openai' => [
         'api_key' => $_ENV['OPENAI_API_KEY'] ?? null

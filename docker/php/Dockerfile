@@ -34,7 +34,7 @@ RUN docker-php-ext-configure gd && \
     docker-php-ext-configure \
             gd --enable-gd --with-freetype --with-jpeg --with-webp
 
-RUN docker-php-ext-install gettext gd pdo_mysql
+RUN docker-php-ext-install gettext gd pdo_mysql bcmath
 
 COPY docker/php/extensions/. /usr/local/etc/php/conf.d/.
 

@@ -193,7 +193,7 @@ class GoogleImagesCrawler extends CrawlerService
                         ));
 
                         // Save meme with extracted tags and hash
-                        if ($this->saveMeme($item->getLink(), $tags, $language, $imageContent, $imageHash)) {
+                        if ($this->saveMeme($item->getLink(), $tags, 'google_crawler', $language, $imageContent, $imageHash)) {
                             echo "✓ Successfully saved meme from URL: {$item->getLink()}\n";
                             $this->stats['total_saved']++;
                         }

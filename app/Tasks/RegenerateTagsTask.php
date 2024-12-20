@@ -4,11 +4,13 @@ namespace App\Tasks;
 
 use App\Models\Memes;
 use App\Models\MemeTags;
+use App\Services\TaggingServices\TaggingServiceFactory;
+use App\Services\TaggingServices\TaggingServiceInterface;
 use Phalcon\Cli\Task;
 
 class RegenerateTagsTask extends Task
 {
-    public function mainAction()
+    public function mainAction($taggingService)
     {
         $this->println("Starting AI tag regeneration...");
 
@@ -29,8 +31,7 @@ class RegenerateTagsTask extends Task
         $total = count($memes);
         $this->println("Found {$total} memes without AI tags to process");
 
-        /** @var \App\Services\AITaggingService $aiService */
-        $aiService = $this->getDI()->get('aiTaggingService');
+        $aiService = TaggingServiceFactory::create($taggingService);
 
         $processed = 0;
         $errors = 0;
@@ -52,6 +53,7 @@ class RegenerateTagsTask extends Task
                         $memeTag->tag = $tag;
                         $memeTag->language = $language === 'ar' ? 'arabic' : 'english';
                         $memeTag->confidence = 0.9; // AI tags get high confidence
+                        $memeTag->origin = $aiService->getOrigin();
                         $memeTag->created_at = $now;
 
                         if ($memeTag->save()) {

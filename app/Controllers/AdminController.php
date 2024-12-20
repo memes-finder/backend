@@ -4,6 +4,8 @@ namespace App\Controllers;
 
 use App\Models\Memes;
 use App\Models\MemeTags;
+use App\Services\TaggingServices\TaggingServiceFactory;
+use App\Services\TaggingServices\TaggingServiceInterface;
 
 class AdminController extends ControllerBase
 {
@@ -55,7 +57,7 @@ class AdminController extends ControllerBase
                 /** @var \App\Services\SearchService $searchService */
                 $searchService = $this->di->get('searchService');
                 // Only exclude status filter if no status is selected
-                $memeIds = $searchService->search($searchQuery, null, 1000, 0, $status);
+                $memeIds = $searchService->search($searchQuery, [], null, 1000, 0, $status);
                 
                 if (!empty($memeIds)) {
                     $conditions[] = 'id IN ({meme_ids:array})';
@@ -281,6 +283,8 @@ class AdminController extends ControllerBase
 
     public function generateTagsAction($memeId)
     {
+        $taggingService = $this->request->getQuery('service', 'string');
+
         if (!$memeId) {
             $this->flash->error("Meme ID is required");
             return $this->response->redirect('/admin');
@@ -293,8 +297,8 @@ class AdminController extends ControllerBase
         }
 
         try {
-            /** @var \App\Services\AITaggingService $aiService */
-            $aiService = $this->di->get('aiTaggingService');
+            /** @var TaggingServiceInterface $aiService */
+            $aiService = TaggingServiceFactory::create($taggingService);
             
             // Generate tags using AI
             $tags = $aiService->generateTags($meme->getPublicUrl());
@@ -308,6 +312,7 @@ class AdminController extends ControllerBase
                     $memeTag->tag = $tag;
                     $memeTag->language = $language === 'ar' ? 'arabic' : 'english';
                     $memeTag->confidence = 0.9; // AI tags get high confidence
+                    $memeTag->origin = $aiService->getOrigin();
                     $memeTag->created_at = $now;
                     
                     if ($memeTag->save()) {
