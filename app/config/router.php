@@ -7,22 +7,6 @@ $router = new Router();
 // Set default namespace
 $router->setDefaultNamespace('App\\Controllers');
 
-// Define your routes here
-$router->add('/api/search', [
-    'controller' => 'api',
-    'action'     => 'search'
-])->via(['GET']);
-
-$router->add('/api/upload', [
-    'controller' => 'api',
-    'action'     => 'upload'
-])->via(['POST']);
-
-$router->add('/api/crawl', [
-    'controller' => 'api',
-    'action'     => 'crawl'
-])->via(['POST']);
-
 // Admin routes
 $router->add('/admin/login', [
     'controller' => 'admin',
@@ -57,6 +41,33 @@ $router->add('/admin/tags/generate/{id:[0-9]+}', [
 $router->add('/admin/delete/{id:[0-9]+}', [
     'controller' => 'admin',
     'action' => 'delete'
+]);
+
+// Define your routes here
+$router->add('/api/search', [
+    'controller' => 'api',
+    'action'     => 'search'
+])->via(['GET']);
+
+$router->add('/api/upload', [
+    'controller' => 'api',
+    'action'     => 'upload'
+])->via(['POST']);
+
+$router->add('/api/crawl', [
+    'controller' => 'api',
+    'action'     => 'crawl'
+])->via(['POST']);
+
+// Tags API endpoints
+$router->addGet('/api/tags/suggestions', [
+    'controller' => 'tags',
+    'action' => 'suggestions'
+]);
+
+$router->addGet('/api/tags/trending', [
+    'controller' => 'tags',
+    'action' => 'trending'
 ]);
 
 // Set 404 paths

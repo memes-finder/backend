@@ -101,7 +101,7 @@ class ApiController extends Controller
             return $this->response->setJsonContent([
                 'status' => 'success',
                 'data' => [
-                    'total' => $results['total'],
+                    'total' => count($formattedResults),
                     'page' => $page,
                     'limit' => $limit,
                     'language' => $responseLanguage,
