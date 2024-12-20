@@ -12,7 +12,7 @@ class RegenerateTagsTask extends Task
 {
     public function mainAction($taggingService)
     {
-        $this->println("Starting AI tag regeneration...");
+        $this->println("Starting {$taggingService} AI tag regeneration...");
 
         // Get memes that don't have AI-generated tags
         $memes = Memes::find([
@@ -73,7 +73,6 @@ class RegenerateTagsTask extends Task
                     }
                 }
 
-                $processed++;
                 $this->println("Successfully processed meme {$meme->id}");
 
                 // Add a small delay to avoid rate limiting

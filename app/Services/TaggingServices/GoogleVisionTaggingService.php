@@ -90,7 +90,7 @@ class GoogleVisionTaggingService extends AbstractTaggingService
 
             // Add text content
             $textAnnotations = $response->getTextAnnotations();
-            if (!empty($textAnnotations)) {
+            if (!empty($textAnnotations[0])) {
                 $fullText = $textAnnotations[0]->getDescription();
                 $fullText = $this->filterTag($fullText);
                 $tags = array_merge($tags, $this->extractTags($fullText));
