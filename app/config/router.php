@@ -70,6 +70,12 @@ $router->addGet('/api/tags/trending', [
     'action' => 'trending'
 ]);
 
+// Main page
+$router->add('/', [
+    'controller' => 'pages',
+    'action' => 'index'
+])->setName('home');
+
 // Legal pages
 $router->add('/privacy', [
     'controller' => 'pages',

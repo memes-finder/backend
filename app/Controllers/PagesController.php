@@ -7,6 +7,16 @@ use Phalcon\Mvc\Controller;
 class PagesController extends Controller
 {
     /**
+     * Index page
+     */
+    public function indexAction()
+    {
+        $this->view->setMainView('layouts/main');
+        $this->view->setVar('title', 'Memes Planet - API Service');
+        $this->view->pick('pages/index');
+    }
+
+    /**
      * Privacy Policy page
      */
     public function privacyAction()

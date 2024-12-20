@@ -1,0 +1,174 @@
+<style>
+    .api-only {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #6c5ce7 0%, #a363d9 100%);
+        color: #fff;
+        text-align: center;
+        padding: 20px;
+    }
+
+    .logo {
+        font-size: 3rem;
+        font-weight: bold;
+        margin-bottom: 1rem;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .api-notice {
+        max-width: 600px;
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        padding: 2rem;
+        border-radius: 15px;
+        margin: 2rem 0;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    }
+
+    .api-notice h1 {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+        color: #fff;
+    }
+
+    .api-notice p {
+        font-size: 1.1rem;
+        line-height: 1.6;
+        margin-bottom: 1rem;
+        color: rgba(255,255,255,0.9);
+    }
+
+    .download-section {
+        margin: 2rem 0;
+    }
+
+    .download-button {
+        display: inline-block;
+        padding: 1rem 2rem;
+        background: #fff;
+        color: #6c5ce7;
+        text-decoration: none;
+        border-radius: 30px;
+        font-weight: bold;
+        transition: transform 0.2s;
+        margin: 0.5rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    .download-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    }
+
+    .footer {
+        margin-top: auto;
+        padding: 2rem;
+        font-size: 0.9rem;
+    }
+
+    .footer a {
+        color: #fff;
+        text-decoration: none;
+        margin: 0 1rem;
+        opacity: 0.8;
+        transition: opacity 0.2s;
+    }
+
+    .footer a:hover {
+        opacity: 1;
+    }
+
+    .api-endpoints {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        text-align: left;
+        font-family: monospace;
+    }
+
+    .endpoint {
+        margin: 0.5rem 0;
+        padding: 0.5rem;
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .method {
+        display: inline-block;
+        padding: 0.2rem 0.5rem;
+        border-radius: 3px;
+        margin-right: 0.5rem;
+        font-weight: bold;
+    }
+
+    .get { background: #2ecc71; }
+    .post { background: #3498db; }
+    .put { background: #f1c40f; }
+    .delete { background: #e74c3c; }
+
+    @media (max-width: 768px) {
+        .logo {
+            font-size: 2rem;
+        }
+
+        .api-notice h1 {
+            font-size: 1.5rem;
+        }
+
+        .api-notice p {
+            font-size: 1rem;
+        }
+
+        .download-button {
+            padding: 0.8rem 1.5rem;
+        }
+    }
+</style>
+
+<div class="api-only">
+    <div class="logo">Memes Planet</div>
+    
+    <div class="api-notice">
+        <h1>API-Only Service</h1>
+        <p>Welcome to Memes Planet! This is an API-only service that powers our mobile application. We do not provide a web interface for browsing or managing memes.</p>
+        
+        <div class="api-endpoints">
+            <p>Available through our app:</p>
+            <div class="endpoint">
+                <span class="method get">GET</span> /api/memes
+            </div>
+            <div class="endpoint">
+                <span class="method get">GET</span> /api/memes/trending
+            </div>
+            <div class="endpoint">
+                <span class="method get">GET</span> /api/memes/search
+            </div>
+            <div class="endpoint">
+                <span class="method post">POST</span> /api/memes/like
+            </div>
+        </div>
+
+        <p>To access our full features and browse our meme collection, please download our official mobile application.</p>
+    </div>
+
+    <div class="download-section">
+        <a href="#" class="download-button">
+            <i class="fab fa-apple"></i> Download for iOS
+        </a>
+        <a href="#" class="download-button">
+            <i class="fab fa-android"></i> Download for Android
+        </a>
+    </div>
+
+    <div class="footer">
+        <a href="/privacy">Privacy Policy</a>
+        <a href="/terms">Terms of Service</a>
+        <a href="/data-deletion">Data Deletion</a>
+        <p style="margin-top: 1rem; opacity: 0.7;">© 2024 Memes Planet. All rights reserved.</p>
+    </div>
+</div>
