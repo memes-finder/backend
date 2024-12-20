@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\MemeTags;
+use App\Models\Memes;
 use Phalcon\Di;
 
 class TagSuggestionService
@@ -20,21 +21,24 @@ class TagSuggestionService
         // Convert language code to full name
         $languageName = $language === 'ar' ? 'arabic' : 'english';
 
-        // Get tags with their usage count
+        // Get tags with their usage count from approved memes only
         $tags = MemeTags::query()
             ->columns([
                 'tag',
                 'COUNT(*) as usage_count',
                 'AVG(confidence) as avg_confidence'
             ])
-            ->where('language = :language:')
+            ->innerJoin(Memes::class, 'Memes.id = \App\Models\MemeTags.meme_id', 'Memes')
+            ->where('\App\Models\MemeTags.language = :language:')
+            ->andWhere('Memes.status = :status:')
             ->groupBy('tag')
             ->having('COUNT(*) >= :min_count:')
             ->orderBy('rand()')
             ->limit(self::MAX_SUGGESTIONS)
             ->bind([
                 'language' => $languageName,
-                'min_count' => self::MIN_TAG_FREQUENCY
+                'min_count' => self::MIN_TAG_FREQUENCY,
+                'status' => Memes::STATUS_APPROVED
             ])
             ->execute()
             ->toArray();
@@ -65,11 +69,18 @@ class TagSuggestionService
                 'tag',
                 'COUNT(*) as usage_count'
             ])
-            ->where('language = :language:', ['language' => $languageName])
-            ->andWhere('created_at >= :last_week:', ['last_week' => $lastWeek])
+            ->innerJoin(Memes::class, 'Memes.id = \App\Models\MemeTags.meme_id', 'Memes')
+            ->where('\App\Models\MemeTags.language = :language:')
+            ->andWhere('\App\Models\MemeTags.created_at >= :last_week:')
+            ->andWhere('Memes.status = :status:')
             ->groupBy('tag')
             ->orderBy('rand()')
             ->limit($limit)
+            ->bind([
+                'language' => $languageName,
+                'last_week' => $lastWeek,
+                'status' => Memes::STATUS_APPROVED
+            ])
             ->execute()
             ->toArray();
 
