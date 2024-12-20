@@ -25,4 +25,14 @@ class PagesController extends Controller
         $this->view->setVar('title', 'Terms of Service - Memes Collection');
         $this->view->pick('pages/terms');
     }
+
+    /**
+     * Data Deletion Instructions page
+     */
+    public function dataDeletionAction()
+    {
+        $this->view->setMainView('layouts/main');
+        $this->view->setVar('title', 'Data Deletion Instructions - Memes Planet');
+        $this->view->pick('pages/data-deletion');
+    }
 }

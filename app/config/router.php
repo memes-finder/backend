@@ -81,6 +81,11 @@ $router->add('/terms', [
     'action' => 'terms'
 ])->setName('terms');
 
+$router->add('/data-deletion', [
+    'controller' => 'pages',
+    'action' => 'dataDeletion'
+])->setName('data-deletion');
+
 // Set 404 paths
 $router->notFound([
     'controller' => 'api',
