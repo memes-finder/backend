@@ -2,9 +2,8 @@
 
 namespace App\Services\Crawlers;
 
-use App\Services\CrawlerService;
 use App\Models\CrawlerState;
-use App\Models\Memes;
+use App\Services\CrawlerService;
 use Google\Client;
 use Google\Service\CustomSearchAPI;
 use GuzzleHttp\Exception\GuzzleException;
@@ -13,10 +12,7 @@ class GoogleImagesCrawler extends CrawlerService
 {
     protected string $sourceName = 'google_images';
     private CustomSearchAPI $searchService;
-    private array $stopWords = [
-        'en' => ['the', 'and', 'for', 'that', 'this', 'with', 'was', 'are', 'what', 'when', 'where', 'who', 'how'],
-        'ar' => ['من', 'في', 'على', 'الى', 'هذا', 'هذه', 'كان', 'كانت', 'مع', 'عن', 'لكن', 'ثم', 'او', 'أو']
-    ];
+
     private const DAILY_LIMIT = 500;
     private const ITEMS_PER_PAGE = 10;
 
@@ -67,8 +63,6 @@ class GoogleImagesCrawler extends CrawlerService
                 'ميمز كوميدي',
                 'ميمز شغل',
                 'ميمز عمل',
-                'ميمز تونسي',
-                'ميمز جزائري',
                 'ميمز مصري',
                 'ميمز سوري',
                 'ميمز لبناني',

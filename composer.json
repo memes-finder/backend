@@ -8,6 +8,7 @@
         "ext-json": "*",
         "ext-phalcon": "^4.0",
         "ext-redis": "*",
+        "ext-dom": "*",
         "vlucas/phpdotenv": "^5.5",
         "predis/predis": "^2.2",
         "aws/aws-sdk-php": "^3.283",
@@ -16,7 +17,7 @@
         "ethanhann/redisearch-php": "^1.9",
         "orhanerday/open-ai": "^5.2",
         "google/cloud-vision": "^1.9",
-        "google/cloud-translate": "^1.17"
+        "google/cloud-translate": "^1.17",
     },
     "autoload": {
         "psr-4": {

@@ -4,17 +4,27 @@ namespace App\Services;
 
 use App\Models\Memes;
 use App\Models\MemeTags;
+use App\Services\Crawlers\Interfaces\CrawlerInterface;
+use App\Services\TaggingServices\Traits\TagExtractionTrait;
 use GuzzleHttp\Client;
 use Aws\S3\S3Client;
 use Exception;
 use GuzzleHttp\Exception\GuzzleException;
 use Phalcon\Di;
 
-abstract class CrawlerService
+abstract class CrawlerService implements CrawlerInterface
 {
+    use TagExtractionTrait;
+
     protected Client $httpClient;
     protected S3Client $s3Client;
     protected string $sourceName;
+
+    protected array $stopWords = [
+        'en' => ['the', 'and', 'for', 'that', 'this', 'with', 'was', 'are', 'what', 'when', 'where', 'who', 'how'],
+        'ar' => ['من', 'في', 'على', 'الى', 'هذا', 'هذه', 'كان', 'كانت', 'مع', 'عن', 'لكن', 'ثم', 'او', 'أو']
+    ];
+
     protected $config;
 
     protected array $stats = [
@@ -146,5 +156,17 @@ abstract class CrawlerService
             error_log('Error saving meme: ' . $e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * Print crawler statistics
+     */
+    protected function printStats(): void
+    {
+        echo "\nCrawling completed!\n";
+        echo "Total processed: {$this->stats['total_processed']}\n";
+        echo "Total saved: {$this->stats['total_saved']}\n";
+        echo "Total errors: {$this->stats['total_errors']}\n";
+        echo "Total duplicates: {$this->stats['total_duplicates']}\n";
     }
 }

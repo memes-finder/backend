@@ -70,6 +70,17 @@ $router->addGet('/api/tags/trending', [
     'action' => 'trending'
 ]);
 
+// Legal pages
+$router->add('/privacy', [
+    'controller' => 'pages',
+    'action' => 'privacy'
+])->setName('privacy');
+
+$router->add('/terms', [
+    'controller' => 'pages',
+    'action' => 'terms'
+])->setName('terms');
+
 // Set 404 paths
 $router->notFound([
     'controller' => 'api',

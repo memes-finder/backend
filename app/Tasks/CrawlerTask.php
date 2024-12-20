@@ -2,6 +2,7 @@
 
 namespace App\Tasks;
 
+use App\Services\Crawlers\Factory\CrawlerFactory;
 use App\Services\Crawlers\GoogleImagesCrawler;
 use Phalcon\Cli\Task;
 
@@ -32,13 +33,12 @@ class CrawlerTask extends Task
     /**
      * Main task action to run the crawler
      */
-    public function mainAction()
+    public function mainAction($crawler)
     {
         try {
             $this->log('Starting crawler task');
             
-            // Initialize and run Google Images crawler
-            $crawler = new GoogleImagesCrawler();
+            $crawler = CrawlerFactory::create($crawler);
             $crawler->crawl();
             
             $this->log('Crawler task completed successfully');
@@ -47,5 +47,14 @@ class CrawlerTask extends Task
             $this->log('Error: Crawler task failed: ' . $e->getMessage());
             return 1;
         }
+    }
+
+    public function helpAction(): int
+    {
+        foreach (CrawlerFactory::getAvailableTypes() as $availableType => $description) {
+            echo $availableType ." => " . $description . "\n";
+        }
+
+        return 0;
     }
 }
