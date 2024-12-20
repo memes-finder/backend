@@ -7,6 +7,7 @@ use App\Models\CrawlerState;
 use App\Models\Memes;
 use Google\Client;
 use Google\Service\CustomSearchAPI;
+use GuzzleHttp\Exception\GuzzleException;
 
 class GoogleImagesCrawler extends CrawlerService
 {
@@ -65,7 +66,15 @@ class GoogleImagesCrawler extends CrawlerService
                 'ميمز سعودي',
                 'ميمز كوميدي',
                 'ميمز شغل',
-                'ميمز عمل'
+                'ميمز عمل',
+                'ميمز تونسي',
+                'ميمز جزائري',
+                'ميمز مصري',
+                'ميمز سوري',
+                'ميمز لبناني',
+                'ميمز اماراتي',
+                'ميمز يمني',
+                'ميمز hr',
             ]
         ];
 
@@ -158,6 +167,7 @@ class GoogleImagesCrawler extends CrawlerService
      * @param string $query Search query
      * @param string $language Language of the query
      * @param int $page Page number
+     * @throws GuzzleException
      */
     private function searchAndSave(string $query, string $language, int $page = 1): void
     {
@@ -171,7 +181,9 @@ class GoogleImagesCrawler extends CrawlerService
                 'lr' => $language === 'ar' ? 'lang_ar' : 'lang_en',
                 'gl' => $language === 'ar' ? 'JO' : 'US',
                 'start' => ($page - 1) * self::ITEMS_PER_PAGE + 1,
-                'filter' => 1
+                'filter' => 1,
+                'siteSearch' => 'facebook.com instagram.com',
+                'siteSearchFilter' => 'e', // Exclude siteSearch
             ];
 
             $results = $this->searchService->cse->listCse($optParams);
