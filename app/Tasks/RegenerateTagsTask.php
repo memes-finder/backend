@@ -16,11 +16,18 @@ class RegenerateTagsTask extends Task
 
         // Get memes that don't have AI-generated tags
         $memes = Memes::find([
-            'conditions' => 'id IN (
-                SELECT meme_id
-                FROM \App\Models\MemeTags
-                GROUP BY meme_id
-                HAVING COUNT(DISTINCT \App\Models\MemeTags.id) < 5
+            'conditions' => '(
+                id IN (
+                    SELECT meme_id
+                    FROM \App\Models\MemeTags
+                    GROUP BY meme_id
+                    HAVING COUNT(DISTINCT \App\Models\MemeTags.id) < 5
+                )
+                OR
+                id NOT IN (
+                    SELECT DISTINCT meme_id
+                    FROM \App\Models\MemeTags
+                )
             ) AND status = :status:',
             'bind' => [
                 'status' => Memes::STATUS_APPROVED
