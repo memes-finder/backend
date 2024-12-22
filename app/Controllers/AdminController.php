@@ -340,6 +340,178 @@ class AdminController extends ControllerBase
         return $this->response->redirect("/admin/tags/{$memeId}");
     }
 
+    public function uploadAction()
+    {
+        if (!$this->view->isLoggedIn) {
+            return $this->response->redirect('/admin/login');
+        }
+
+        if ($this->request->isPost()) {
+            try {
+                if (!$this->request->hasFiles()) {
+                    throw new \Exception('No files were uploaded');
+                }
+
+                $uploadedFiles = $this->request->getUploadedFiles();
+                $successCount = 0;
+                $errorCount = 0;
+                $errors = [];
+
+                foreach ($uploadedFiles as $file) {
+                    try {
+                        if ($file->getRealType() === 'application/zip') {
+                            // Create a temporary directory for ZIP extraction
+                            $tempDir = sys_get_temp_dir() . '/' . uniqid('memes_');
+                            mkdir($tempDir);
+
+                            // Extract ZIP file
+                            $zip = new \ZipArchive();
+                            if ($zip->open($file->getTempName()) === true) {
+                                $zip->extractTo($tempDir);
+                                $zip->close();
+
+                                // Process all images in the ZIP
+                                $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif'];
+                                $iterator = new \RecursiveIteratorIterator(
+                                    new \RecursiveDirectoryIterator($tempDir)
+                                );
+
+                                foreach ($iterator as $file) {
+                                    if ($file->isFile()) {
+                                        $extension = strtolower(pathinfo($file->getFilename(), PATHINFO_EXTENSION));
+                                        if (in_array($extension, $allowedExtensions)) {
+                                            $this->processImage($file->getPathname(), $file->getFilename(), $successCount, $errorCount, $errors);
+                                        }
+                                    }
+                                }
+
+                                // Clean up
+                                $this->rrmdir($tempDir);
+                            } else {
+                                throw new \Exception('Failed to open ZIP file');
+                            }
+                        } else {
+                            // Process single image
+                            $this->processImage($file->getTempName(), $file->getName(), $successCount, $errorCount, $errors);
+                        }
+                    } catch (\Exception $e) {
+                        $errorCount++;
+                        $errors[] = $file->getName() . ': ' . $e->getMessage();
+                        continue;
+                    }
+                }
+
+                if ($successCount > 0) {
+                    $this->flash->success("Successfully uploaded {$successCount} memes.");
+                }
+                if ($errorCount > 0) {
+                    $this->flash->error("Failed to upload {$errorCount} memes:<br>" . implode('<br>', $errors));
+                }
+
+                return $this->response->redirect('/admin/upload');
+            } catch (\Exception $e) {
+                $this->flash->error('Upload failed: ' . $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * Process a single image file
+     * @param string $tempPath Path to temporary file
+     * @param string $originalName Original filename
+     * @param int $successCount Reference to success counter
+     * @param int $errorCount Reference to error counter
+     * @param array $errors Reference to errors array
+     */
+    private function processImage($tempPath, $originalName, &$successCount, &$errorCount, &$errors)
+    {
+        try {
+            // Check if it's an image
+            $imageInfo = getimagesize($tempPath);
+            if (!$imageInfo) {
+                throw new \Exception('Invalid image file');
+            }
+
+            $mimeType = $imageInfo['mime'];
+            if (!in_array($mimeType, ['image/jpeg', 'image/png', 'image/gif'])) {
+                throw new \Exception("Invalid file type: {$mimeType}");
+            }
+
+            // Get image content and hash
+            $imageContent = file_get_contents($tempPath);
+            $imageHash = md5($imageContent);
+
+            // Check for duplicate
+            if (Memes::findFirst([
+                'conditions' => 'file_hash = :hash:',
+                'bind' => ['hash' => $imageHash]
+            ])) {
+                throw new \Exception('Duplicate image');
+            }
+
+            // Generate unique filename
+            $extension = image_type_to_extension($imageInfo[2], false);
+            $filename = sprintf(
+                '%s/%s.%s',
+                date('Y/m'),
+                md5(uniqid() . $originalName),
+                $extension
+            );
+
+            // Upload to S3
+            $s3Client = $this->di->get('s3Client');
+            $s3Client->putObject([
+                'Bucket' => $this->config->aws->bucket,
+                'Key' => $filename,
+                'Body' => $imageContent,
+                'ContentType' => $mimeType,
+                'ACL' => 'public-read'
+            ]);
+
+            // Create meme record
+            $meme = new Memes();
+            $meme->file_path = $filename;
+            $meme->source_url = '';
+            $meme->source_type = 'admin_upload';
+            $meme->width = $imageInfo[0];
+            $meme->height = $imageInfo[1];
+            $meme->file_size = strlen($imageContent);
+            $meme->mime_type = $mimeType;
+            $meme->file_hash = $imageHash;
+            $meme->status = Memes::STATUS_PENDING;
+
+            if (!$meme->save()) {
+                throw new \Exception('Failed to save meme record: ' . implode(', ', $meme->getMessages()));
+            }
+
+            $successCount++;
+        } catch (\Exception $e) {
+            $errorCount++;
+            $errors[] = $originalName . ': ' . $e->getMessage();
+        }
+    }
+
+    /**
+     * Recursively remove a directory and its contents
+     * @param string $dir Directory path
+     */
+    private function rrmdir($dir)
+    {
+        if (is_dir($dir)) {
+            $objects = scandir($dir);
+            foreach ($objects as $object) {
+                if ($object != "." && $object != "..") {
+                    if (is_dir($dir . "/" . $object)) {
+                        $this->rrmdir($dir . "/" . $object);
+                    } else {
+                        unlink($dir . "/" . $object);
+                    }
+                }
+            }
+            rmdir($dir);
+        }
+    }
+
     public function loginAction()
     {
         // Set empty layout for login page

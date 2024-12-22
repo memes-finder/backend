@@ -2,6 +2,7 @@
 
 use App\Enums\CacheIndexesEnum;
 use App\Redis\Connector;
+use Aws\S3\S3Client;
 use Ehann\RediSearch\Index;
 use Ehann\RediSearch\Suggestion;
 use Phalcon\Logger\AdapterFactory;
@@ -197,4 +198,17 @@ $di->setShared('dispatcher', function () {
     $dispatcher->setEventsManager($eventsManager);
     
     return $dispatcher;
+});
+
+$di->setShared('s3Client', function () {
+    $config = $this->getConfig()->aws;
+
+    return new S3Client([
+        'version' => 'latest',
+        'region'  => $config->region,
+        'credentials' => [
+            'key'    => $config->key,
+            'secret' => $config->secret,
+        ]
+    ]);
 });

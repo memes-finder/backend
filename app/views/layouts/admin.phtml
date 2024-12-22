@@ -86,6 +86,9 @@
                         <span><i class="fas fa-check me-2"></i> Approved</span>
                         <span class="badge <?= $status === 'approved' ? 'bg-light text-dark' : 'bg-success' ?> rounded-pill"><?= $memeCounts['approved'] ?? 0 ?></span>
                     </a>
+                    <a href="/admin/upload" class="list-group-item list-group-item-action">
+                        <i class="fas fa-upload me-2"></i> Bulk Upload
+                    </a>
                     <a href="/admin/logout" class="list-group-item list-group-item-action">
                         <i class="fas fa-sign-out-alt me-2"></i> Logout
                     </a>

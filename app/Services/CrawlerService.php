@@ -41,14 +41,7 @@ abstract class CrawlerService implements CrawlerInterface
         
         $this->httpClient = new Client();
         
-        $this->s3Client = new S3Client([
-            'version' => 'latest',
-            'region'  => $this->config->aws->region,
-            'credentials' => [
-                'key'    => $this->config->aws->key,
-                'secret' => $this->config->aws->secret,
-            ]
-        ]);
+        $this->s3Client = $this->di->get('s3Client');
     }
 
     /**

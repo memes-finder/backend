@@ -22,7 +22,8 @@ RUN apt-get update && apt-get install -y \
     libpng-dev \
     imagemagick \
     libmagickwand-dev \
-    libwebp-dev
+    libwebp-dev \
+    libzip-dev
 
 # Install Composer
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
@@ -34,7 +35,7 @@ RUN docker-php-ext-configure gd && \
     docker-php-ext-configure \
             gd --enable-gd --with-freetype --with-jpeg --with-webp
 
-RUN docker-php-ext-install gettext gd pdo_mysql bcmath
+RUN docker-php-ext-install gettext gd pdo_mysql bcmath zip
 
 COPY docker/php/extensions/. /usr/local/etc/php/conf.d/.
 

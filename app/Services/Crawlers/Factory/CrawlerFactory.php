@@ -3,7 +3,6 @@
 namespace App\Services\Crawlers\Factory;
 
 use App\Services\Crawlers\Interfaces\CrawlerInterface;
-use App\Services\Crawlers\FacebookCrawler;
 use App\Services\Crawlers\GoogleImagesCrawler;
 use InvalidArgumentException;
 
@@ -22,8 +21,6 @@ class CrawlerFactory
     public static function create(string $type): CrawlerInterface
     {
         switch ($type) {
-            case self::CRAWLER_FACEBOOK:
-                return new FacebookCrawler();
             case self::CRAWLER_GOOGLE:
                 return new GoogleImagesCrawler();
             default:

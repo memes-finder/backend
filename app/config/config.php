@@ -36,5 +36,5 @@ return new \Phalcon\Config([
     ],
     'openai' => [
         'api_key' => $_ENV['OPENAI_API_KEY'] ?? null
-    ]
+    ],
 ]);
