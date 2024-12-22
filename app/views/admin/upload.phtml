@@ -1,0 +1,64 @@
+<?php
+if (!$isLoggedIn) {
+    return $this->response->redirect('/admin/login');
+}
+?>
+
+<div class="container mx-auto px-4 py-8">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold mb-4">Bulk Upload Memes</h1>
+        <p class="text-gray-600">Upload multiple meme images at once. Supported formats: JPEG, PNG, GIF, ZIP</p>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <form action="/admin/upload" method="post" enctype="multipart/form-data" class="space-y-6">
+            <div class="space-y-4">
+                <label class="block">
+                    <span class="text-gray-700">Choose Images or ZIP file</span>
+                    <br />
+                    <input type="file" name="memes[]" multiple accept="image/jpeg,image/png,image/gif,application/zip" 
+                           class="form-control" required>
+                </label>
+                <p class="text-sm text-gray-500">You can select multiple image files or a single ZIP file containing images</p>
+            </div>
+
+            <div class="flex items-center justify-end">
+                <button type="submit" 
+                        class="btn btn-primary">
+                    Upload Memes
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <?php if ($this->flash->has()) : ?>
+        <div class="mt-6">
+            <?php $this->flash->output() ?>
+        </div>
+    <?php endif; ?>
+</div>
+
+<script>
+document.querySelector('input[type="file"]').addEventListener('change', function(e) {
+    const files = e.target.files;
+    const maxSize = 50 * 1024 * 1024; // 50MB for ZIP files
+    const maxImageSize = 5 * 1024 * 1024; // 5MB for individual images
+    let oversizedFiles = [];
+
+    for (let file of files) {
+        const isZip = file.type.indexOf('zip') !== -1;
+        const sizeLimit = isZip ? maxSize : maxImageSize;
+
+        console.log(isZip);
+        
+        if (file.size > sizeLimit) {
+            oversizedFiles.push(`${file.name} (${isZip ? '50MB' : '5MB'} limit)`);
+        }
+    }
+
+    if (oversizedFiles.length > 0) {
+        alert('The following files exceed the size limit:\n' + oversizedFiles.join('\n'));
+        e.target.value = ''; // Clear the file input
+    }
+});
+</script>
