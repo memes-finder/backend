@@ -53,23 +53,6 @@ class GoogleImagesCrawler extends CrawlerService
     {
         $searchQueries = [
             'ar' => [
-                'ميمز عربي',
-                'ميمز مضحك',
-                'ميمز مصري',
-                'ميمز خليجي',
-                'ميمز شعبي',
-                'ميمز اردني',
-                'ميمز سعودي',
-                'ميمز كوميدي',
-                'ميمز شغل',
-                'ميمز عمل',
-                'ميمز مصري',
-                'ميمز سوري',
-                'ميمز لبناني',
-                'ميمز اماراتي',
-                'ميمز يمني',
-                'ميمز hr',
-                'ميمز cj',
                 'ميمز قطط',
                 'ميمز'
             ]
@@ -197,8 +180,8 @@ class GoogleImagesCrawler extends CrawlerService
 
                         // Extract tags from title and snippet
                         $tags = array_unique(array_merge(
-                            $this->extractTags($item->getTitle(), $language),
-                            $this->extractTags($item->getSnippet(), $language)
+                            $this->extractTags($item->getTitle() ?? '', $language),
+                            $this->extractTags($item->getSnippet() ?? '', $language)
                         ));
 
                         // Save meme with extracted tags and hash
