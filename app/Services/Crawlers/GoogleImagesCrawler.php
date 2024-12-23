@@ -69,6 +69,7 @@ class GoogleImagesCrawler extends CrawlerService
                 'ميمز اماراتي',
                 'ميمز يمني',
                 'ميمز hr',
+                'ميمز cj'
             ]
         ];
 
@@ -223,7 +224,7 @@ class GoogleImagesCrawler extends CrawlerService
      * @param string $language Language of the text
      * @return array Array of tags with confidence scores
      */
-    private function extractTags(string $text, string $language): array
+    protected function extractTags(string $text, string $language): array
     {
         // Remove special characters and split into words
         $words = preg_split('/[\s,]+/', preg_replace('/[^\p{L}\s,]/u', '', $text));
