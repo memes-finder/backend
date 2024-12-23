@@ -141,7 +141,8 @@ class SearchService extends Injectable
                 $normalizedTag = $this->normalizeTag($tag);
             }
 
-            $document = new DocumentMapper();
+            $documentId = sprintf("meme:$memeId:%s", uniqid('', true));
+            $document = new DocumentMapper($documentId);
             $document = $document->makeDocument($memeId, $tag, $normalizedTag, $language);
 
             return $this->redisIndexing->add($document);
@@ -162,10 +163,9 @@ class SearchService extends Injectable
      * @param string|null $language
      * @param int $limit
      * @param int $offset
-     * @param string $status If true, includes all memes regardless of status
      * @return array
      */
-    public function search(?string $query, ?array $tags = [], string $language = null, int $limit = 10, int $offset = 0, string $status = ''): array
+    public function search(?string $query, ?array $tags = [], string $language = null, int $limit = 10, int $offset = 0): array
     {
         try {
             // Ensure index exists with stemming
@@ -217,7 +217,9 @@ class SearchService extends Injectable
             // Combine all search parts with AND operator
             $searchQuery = implode(' & ', $searchParts);
 
-            $results = $this->redisIndexing->search($searchQuery, true);
+            $results = $this->redisIndexing
+                ->limit($offset, $limit)
+                ->search($searchQuery, true);
             
             // Extract meme IDs from results
             $memeIds = [];
@@ -231,31 +233,44 @@ class SearchService extends Injectable
                 return [];
             }
 
-            // Build query conditions
-            $conditions = ['id IN ({ids:array})'];
-            $binds = ['ids' => $memeIds];
-
-            // Only filter by status for non-admin searches
-            if ($status) {
-                $conditions[] = 'status = :status:';
-                $binds['status'] = $status;
-            }
-
-            // Get memes
-            $memes = Memes::find([
-                'conditions' => implode(' AND ', $conditions),
-                'bind' => $binds,
-                'limit' => $limit,
-                'offset' => $offset
-            ]);
-
-            return array_map(fn($meme) => $meme['id'], $memes->toArray());
+            return array_unique($memeIds);
         } catch (\Exception $e) {
             $this->logger->error(
                 'Search failed: ' . $e->getMessage(),
                 ['exception' => $e, 'query' => $query, 'tags' => $tags, 'language' => $language]
             );
             return [];
+        }
+    }
+
+    /**
+     * Remove a meme and its tags from the search index
+     *
+     * @param int $memeId
+     * @throws \Exception
+     */
+    public function removeMeme(int $memeId)
+    {
+        try {
+            if (empty($memeId)) {
+                throw new \Exception('Missing meme ID');
+            }
+
+            // Delete all documents with this meme_id
+            $this->redisIndexing->delete("meme:{$memeId}", true);
+
+            // Delete all tag documents for this meme
+            $pattern = "tag:{$memeId}:*";
+            $keys = $this->redis->keys($pattern);
+            if (!empty($keys)) {
+                $this->redis->del($keys);
+            }
+        } catch (\Exception $e) {
+            $this->logger->error(
+                'Failed to remove meme from search index: ' . $e->getMessage(),
+                ['exception' => $e, 'memeId' => $memeId]
+            );
+            throw $e;
         }
     }
 

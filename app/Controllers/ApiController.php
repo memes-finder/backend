@@ -3,11 +3,10 @@
 namespace App\Controllers;
 
 use App\Services\SearchService;
-use Phalcon\Mvc\Controller;
 use App\Models\Memes;
 use App\Models\SearchLogs;
 
-class ApiController extends Controller
+class ApiController extends BaseApiController
 {
     /**
      * Get language from Accept-Language header
@@ -41,6 +40,7 @@ class ApiController extends Controller
             $tags = $this->request->getQuery('tags', 'string', '');
             $page = $this->request->getQuery('page', 'int', 1);
             $limit = $this->request->getQuery('limit', 'int', 20);
+            $offset = ($page - 1) * $limit;
 
             // Parse tags if provided
             $tagArray = [];
@@ -67,50 +67,58 @@ class ApiController extends Controller
             $searchLog->language = $responseLanguage;
             $searchLog->save();
 
-            // Search in both languages
-            $offset = ($page - 1) * $limit;
-
             /** @var SearchService $searchService */
             $searchService = $this->di->get('searchService');
-            $memeIds = $searchService->search($query, $tagArray, $responseLanguage, $limit, $offset, Memes::STATUS_APPROVED);
+            
+            // Get meme IDs from search service
+            $memeIds = array_values($searchService->search($query, $tagArray, $responseLanguage, $limit, $offset));
+            $totalMemeIds = array_values($searchService->search($query, $tagArray, $responseLanguage, 1000));
 
             // Get meme details
-            if ($memeIds) {
+            $formattedResults = [];
+            if (!empty($memeIds)) {
                 /** @var Memes[] $memes */
                 $memes = Memes::find([
-                    'conditions' => 'id IN ({ids:array})',
-                    'bind' => ['ids' => $memeIds]
-                ]);
-            } else {
-                $memes = [];
-            }
-
-            $formattedResults = [];
-            foreach ($memes as $meme) {
-                // Get tags in both languages but prioritize response language
-                $primaryTags = array_column($meme->getTagsByLanguage($responseLanguage === 'ar' ? 'arabic' : 'english')->toArray(), 'tag');
-                $secondaryTags = array_column($meme->getTagsByLanguage($responseLanguage === 'ar' ? 'english' : 'arabic')->toArray(), 'tag');
-
-                $formattedResults[] = [
-                    'id' => $meme->id,
-                    'url' => $meme->getPublicUrl(),
-                    'width' => $meme->width,
-                    'height' => $meme->height,
-                    'tags' => [
-                        'primary' => $primaryTags,
-                        'secondary' => $secondaryTags
+                    'id IN ({ids:array})',
+                    'bind' => [
+                        'ids' => $memeIds
                     ]
-                ];
+                ]);
+
+                foreach ($memes as $meme) {
+                    // Get tags in both languages but prioritize response language
+                    $primaryTags = array_column($meme->getTagsByLanguage($responseLanguage === 'ar' ? 'arabic' : 'english')->toArray(), 'tag');
+                    $secondaryTags = array_column($meme->getTagsByLanguage($responseLanguage === 'ar' ? 'english' : 'arabic')->toArray(), 'tag');
+
+                    $formattedResults[] = [
+                        'id' => $meme->id,
+                        'url' => $meme->getPublicUrl(),
+                        'width' => $meme->width,
+                        'height' => $meme->height,
+                        'tags' => [
+                            'primary' => $primaryTags,
+                            'secondary' => $secondaryTags
+                        ]
+                    ];
+                }
             }
+
+            // Get total count of approved memes
+            $totalApprovedCount = Memes::count([
+                'conditions' => 'id IN ({ids:array})',
+                'bind' => [
+                    'ids' => $totalMemeIds
+                ]
+            ]);
 
             // Update search log with results count
-            $searchLog->results_count = count($formattedResults);
+            $searchLog->results_count = $totalApprovedCount;
             $searchLog->save();
 
             return $this->response->setJsonContent([
                 'status' => 'success',
                 'data' => [
-                    'total' => count($formattedResults),
+                    'total' => $totalApprovedCount,
                     'page' => $page,
                     'limit' => $limit,
                     'language' => $responseLanguage,
@@ -118,9 +126,15 @@ class ApiController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
+            $this->logger->error('Search error: ' . $e->getMessage(), [
+                'query' => $query ?? null,
+                'tags' => $tags ?? null,
+                'exception' => $e
+            ]);
+
             return $this->response->setJsonContent([
                 'status' => 'error',
-                'message' => 'An error occurred while processing your request'
+                'message' => 'An error occurred while processing your search'
             ])->setStatusCode(500);
         }
     }

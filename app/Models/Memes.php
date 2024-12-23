@@ -115,6 +115,54 @@ class Memes extends Model
         }
     }
 
+    public function beforeDelete()
+    {
+        try {
+            // Delete all associated tags
+            $tags = $this->getTags();
+            foreach ($tags as $tag) {
+                if (!$tag->delete()) {
+                    // Log error but continue
+                    $this->getDI()->get('logger')->error(
+                        "Failed to delete tag {$tag->id} for meme {$this->id}: " . 
+                        implode(', ', $tag->getMessages())
+                    );
+                }
+            }
+
+            // Remove from search index
+            try {
+                $this->getDI()->get('searchService')->removeMeme($this->id);
+            } catch (\Exception $e) {
+                // Log error but continue
+                $this->getDI()->get('logger')->error(
+                    "Failed to remove meme {$this->id} from search index: " . $e->getMessage()
+                );
+            }
+
+            // Delete the file from S3
+            try {
+                $s3Client = $this->getDI()->get('s3Client');
+                $s3Client->deleteObject([
+                    'Bucket' => $this->getDI()->get('config')->aws->bucket,
+                    'Key' => $this->file_path
+                ]);
+            } catch (\Exception $e) {
+                // Log error but continue
+                $this->getDI()->get('logger')->error(
+                    "Failed to delete S3 object for meme {$this->id}: " . $e->getMessage()
+                );
+            }
+
+            return true;
+        } catch (\Exception $e) {
+            $this->getDI()->get('logger')->error(
+                "Error in beforeDelete for meme {$this->id}: " . $e->getMessage()
+            );
+            return false;
+        }
+    }
+
     /**
      * Approve the meme
      * @return bool

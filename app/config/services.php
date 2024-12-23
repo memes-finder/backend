@@ -159,6 +159,10 @@ $di->setShared('redisSuggest', function () {
     return new Suggestion($this->getCache()['adapter']);
 });
 
+$di->setShared('rateLimiter', function () {
+    return $this->getCache($_ENV['REDIS_INDEX'])['instance'];
+});
+
 // Register the search service
 $di->setShared('searchService', function () {
     return new \App\Services\SearchService();

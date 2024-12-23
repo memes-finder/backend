@@ -57,7 +57,7 @@ class AdminController extends ControllerBase
                 /** @var \App\Services\SearchService $searchService */
                 $searchService = $this->di->get('searchService');
                 // Only exclude status filter if no status is selected
-                $memeIds = $searchService->search($searchQuery, [], null, 1000, 0, $status);
+                $memeIds = $searchService->search($searchQuery, [], null, 1000);
                 
                 if (!empty($memeIds)) {
                     $conditions[] = 'id IN ({meme_ids:array})';

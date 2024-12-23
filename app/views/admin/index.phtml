@@ -96,15 +96,15 @@
     <nav class="mt-4">
         <ul class="pagination justify-content-center">
             <li class="page-item <?= $memes->current == 1 ? 'disabled' : '' ?>">
-                <a class="page-link" href="?page=<?= $memes->before ?>&status=<?= $status ?>">Previous</a>
+                <a class="page-link" href="?page=<?= $memes->before ?><?= $status ? "&status=$status" : '' ?><?= $searchQuery ? "&q=" . urlencode($searchQuery) : '' ?>">Previous</a>
             </li>
             <?php for ($i = 1; $i <= ceil($memes->total_items / $memes->limit); $i++): ?>
                 <li class="page-item <?= $memes->current == $i ? 'active' : '' ?>">
-                    <a class="page-link" href="?page=<?= $i ?>&status=<?= $status ?>"><?= $i ?></a>
+                    <a class="page-link" href="?page=<?= $i ?><?= $status ? "&status=$status" : '' ?><?= $searchQuery ? "&q=" . urlencode($searchQuery) : '' ?>"><?= $i ?></a>
                 </li>
             <?php endfor; ?>
             <li class="page-item <?= $memes->current >= ceil($memes->total_items / $memes->limit) ? 'disabled' : '' ?>">
-                <a class="page-link" href="?page=<?= $memes->next ?>&status=<?= $status ?>">Next</a>
+                <a class="page-link" href="?page=<?= $memes->next ?><?= $status ? "&status=$status" : '' ?><?= $searchQuery ? "&q=" . urlencode($searchQuery) : '' ?>">Next</a>
             </li>
         </ul>
     </nav>
