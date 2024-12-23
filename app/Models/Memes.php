@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Aws\S3\S3Client;
 use Phalcon\Mvc\Model;
 
 class Memes extends Model
@@ -142,6 +143,7 @@ class Memes extends Model
 
             // Delete the file from S3
             try {
+                /** @var S3Client $s3Client */
                 $s3Client = $this->getDI()->get('s3Client');
                 $s3Client->deleteObject([
                     'Bucket' => $this->getDI()->get('config')->aws->bucket,

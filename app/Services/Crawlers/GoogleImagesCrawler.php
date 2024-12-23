@@ -69,7 +69,9 @@ class GoogleImagesCrawler extends CrawlerService
                 'ميمز اماراتي',
                 'ميمز يمني',
                 'ميمز hr',
-                'ميمز cj'
+                'ميمز cj',
+                'ميمز قطط',
+                'ميمز'
             ]
         ];
 
@@ -177,7 +179,7 @@ class GoogleImagesCrawler extends CrawlerService
                 'gl' => $language === 'ar' ? 'JO' : 'US',
                 'start' => ($page - 1) * self::ITEMS_PER_PAGE + 1,
                 'filter' => 1,
-                'siteSearch' => 'facebook.com instagram.com tiktok.com',
+                'siteSearch' => 'facebook.com instagram.com tiktok.com youtube.com',
                 'siteSearchFilter' => 'e', // Exclude siteSearch
             ];
 
