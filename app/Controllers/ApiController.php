@@ -126,58 +126,27 @@ class ApiController extends BaseApiController
                 ]
             ]);
         } catch (\Exception $e) {
-            $this->logger->error('Search error: ' . $e->getMessage(), [
-                'query' => $query ?? null,
-                'tags' => $tags ?? null,
-                'exception' => $e
-            ]);
+            // Log error details
+            $this->di->get('logger')->error(
+                sprintf(
+                    "[API Error] %s\nFile: %s\nLine: %d\nTrace:\n%s",
+                    $e->getMessage(),
+                    $e->getFile(),
+                    $e->getLine(),
+                    $e->getTraceAsString()
+                ),
+                [
+                    'query' => $query ?? null,
+                    'tags' => $tags ?? null,
+                    'page' => $page ?? null,
+                    'limit' => $limit ?? null,
+                    'language' => $responseLanguage ?? null
+                ]
+            );
 
             return $this->response->setJsonContent([
                 'status' => 'error',
                 'message' => 'An error occurred while processing your search'
-            ])->setStatusCode(500);
-        }
-    }
-
-    /**
-     * Get search suggestions
-     */
-    public function suggestionsAction()
-    {
-        try {
-            $prefix = $this->request->getQuery('q', 'string');
-
-            if (empty($prefix)) {
-                return $this->response->setJsonContent([
-                    'status' => 'error',
-                    'message' => 'Query parameter is required'
-                ]);
-            }
-
-            // Get language from header
-            $responseLanguage = $this->getLanguageFromHeader();
-
-            // Get suggestions in both languages but prioritize response language
-            $primarySuggestions = $this->di->get('searchService')->getSuggestions($prefix, $responseLanguage);
-            $secondarySuggestions = $this->di->get('searchService')->getSuggestions(
-                $prefix, 
-                $responseLanguage === 'en' ? 'ar' : 'en'
-            );
-
-            return $this->response->setJsonContent([
-                'status' => 'success',
-                'data' => [
-                    'language' => $responseLanguage,
-                    'suggestions' => [
-                        'primary' => $primarySuggestions,
-                        'secondary' => $secondarySuggestions
-                    ]
-                ]
-            ]);
-        } catch (\Exception $e) {
-            return $this->response->setJsonContent([
-                'status' => 'error',
-                'message' => 'An error occurred while processing your request'
             ])->setStatusCode(500);
         }
     }

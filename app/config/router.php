@@ -49,16 +49,6 @@ $router->add('/api/search', [
     'action'     => 'search'
 ])->via(['GET']);
 
-$router->add('/api/upload', [
-    'controller' => 'api',
-    'action'     => 'upload'
-])->via(['POST']);
-
-$router->add('/api/crawl', [
-    'controller' => 'api',
-    'action'     => 'crawl'
-])->via(['POST']);
-
 // Tags API endpoints
 $router->addGet('/api/tags/suggestions', [
     'controller' => 'tags',

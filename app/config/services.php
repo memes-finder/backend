@@ -108,6 +108,15 @@ $di->setShared('cookies', function () {
  * Logger service
  */
 $di->setShared('logger', function () {
+    $logPath = BASE_PATH . '/storage/logs/errors.log';
+    $logger = new \Phalcon\Logger\Adapter\Stream($logPath);
+    return $logger;
+});
+
+/**
+ * Logger service
+ */
+$di->setShared('logger', function () {
     // Create logs directory if it doesn't exist
     $logPath = BASE_PATH . '/storage/logs';
     if (!is_dir($logPath)) {

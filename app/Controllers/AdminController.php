@@ -35,30 +35,30 @@ class AdminController extends ControllerBase
 
     public function indexAction()
     {
-        $currentPage = $this->request->getQuery('page', 'int', 1);
-        $status = $this->request->getQuery('status', 'string', '');
-        $searchQuery = $this->request->getQuery('q', 'string', '');
-        $limit = 20;
+        try {
+            $currentPage = $this->request->getQuery('page', 'int', 1);
+            $status = $this->request->getQuery('status', 'string', '');
+            $searchQuery = $this->request->getQuery('q', 'string', '');
+            $limit = 20;
 
-        // Build query conditions
-        $conditions = [];
-        $binds = [];
-        $parameters = [];
-        
-        // Add status condition if selected
-        if ($status) {
-            $conditions[] = 'status = :status:';
-            $binds['status'] = $status;
-        }
+            // Build query conditions
+            $conditions = [];
+            $binds = [];
+            $parameters = [];
+            
+            // Add status condition if selected
+            if ($status) {
+                $conditions[] = 'status = :status:';
+                $binds['status'] = $status;
+            }
 
-        // If search query exists, get meme IDs from search service
-        if ($searchQuery) {
-            try {
+            // If search query exists, get meme IDs from search service
+            if ($searchQuery) {
                 /** @var \App\Services\SearchService $searchService */
                 $searchService = $this->di->get('searchService');
                 // Only exclude status filter if no status is selected
-                $memeIds = $searchService->search($searchQuery, [], null, 1000);
-                
+                $memeIds = array_values($searchService->search($searchQuery, [], null, 1000));
+
                 if (!empty($memeIds)) {
                     $conditions[] = 'id IN ({meme_ids:array})';
                     $binds['meme_ids'] = $memeIds;
@@ -66,28 +66,45 @@ class AdminController extends ControllerBase
                     // No results found
                     $conditions[] = 'id = 0'; // Force no results
                 }
-            } catch (\Exception $e) {
-                $this->flash->error("Search error: " . $e->getMessage());
             }
+
+            $parameters['conditions'] = !empty($conditions) ? implode(' AND ', $conditions) : null;
+            $parameters['bind'] = $binds;
+            $parameters['order'] = 'created_at DESC';
+
+            // Now set up pagination
+            $paginator = new \Phalcon\Paginator\Adapter\Model([
+                'model' => Memes::class,
+                'parameters' => $parameters,
+                'limit' => $limit,
+                'page' => $currentPage
+            ]);
+
+            $page = $paginator->paginate();
+
+            $this->view->memes = $page;
+            $this->view->status = $status;
+            $this->view->searchQuery = $searchQuery;
+        } catch (\Exception $e) {
+            // Log general error
+            $this->di->get('logger')->error(
+                sprintf(
+                    "[Admin Error] %s\nFile: %s\nLine: %d\nTrace:\n%s",
+                    $e->getMessage(),
+                    $e->getFile(),
+                    $e->getLine(),
+                    $e->getTraceAsString()
+                ),
+                [
+                    'page' => $currentPage ?? null,
+                    'status' => $status ?? null,
+                    'query' => $searchQuery ?? null
+                ]
+            );
+
+            $this->flash->error('An error occurred while loading memes. Please try again.');
+            return $this->response->redirect('/admin');
         }
-
-        $parameters['conditions'] = !empty($conditions) ? implode(' AND ', $conditions) : null;
-        $parameters['bind'] = $binds;
-        $parameters['order'] = 'created_at DESC';
-
-        // Now set up pagination
-        $paginator = new \Phalcon\Paginator\Adapter\Model([
-            'model' => Memes::class,
-            'parameters' => $parameters,
-            'limit' => $limit,
-            'page' => $currentPage
-        ]);
-
-        $page = $paginator->paginate();
-
-        $this->view->memes = $page;
-        $this->view->status = $status;
-        $this->view->searchQuery = $searchQuery;
     }
 
     public function memeAction($id = null)

@@ -47,6 +47,19 @@ class TagsController extends ControllerBase
                 ]
             ]);
         } catch (\Exception $e) {
+            // Log error details
+            $this->di->get('logger')->error(
+                sprintf(
+                    "[API Error] %s\nFile: %s\nLine: %d\nTrace:\n%s",
+                    $e->getMessage(),
+                    $e->getFile(),
+                    $e->getLine(),
+                    $e->getTraceAsString()
+                ),
+                [
+                    'language' => $responseLanguage ?? null
+                ]
+            );
             return $this->response
                 ->setStatusCode(500)
                 ->setJsonContent([
@@ -98,6 +111,19 @@ class TagsController extends ControllerBase
                 ]
             ]);
         } catch (\Exception $e) {
+            // Log error details
+            $this->di->get('logger')->error(
+                sprintf(
+                    "[API Error] %s\nFile: %s\nLine: %d\nTrace:\n%s",
+                    $e->getMessage(),
+                    $e->getFile(),
+                    $e->getLine(),
+                    $e->getTraceAsString()
+                ),
+                [
+                    'language' => $responseLanguage ?? null
+                ]
+            );
             return $this->response
                 ->setStatusCode(500)
                 ->setJsonContent([
