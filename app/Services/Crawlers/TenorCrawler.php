@@ -8,9 +8,9 @@ use GuzzleHttp\Client;
 class TenorCrawler extends CrawlerService
 {
     private const ITEMS_PER_PAGE = 50;
-    private const MAX_PAGES = 50; // Maximum pages per keyword
+    private const MAX_PAGES = 10; // Maximum pages per keyword
     private const API_BASE = 'https://tenor.googleapis.com/v2/';
-    private const MAX_RESULTS_PER_KEYWORD = 2500; // 50 pages * 50 items per page
+    private const MAX_RESULTS_PER_KEYWORD = 500; // 50 pages * 50 items per page
 
     protected string $sourceName = 'tenor';
 
