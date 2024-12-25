@@ -38,6 +38,6 @@ return new \Phalcon\Config([
         'api_key' => $_ENV['OPENAI_API_KEY'] ?? null
     ],
     'tenor' => [
-        'api_key' => getenv('TENOR_API_KEY')
+        'api_key' => $_ENV['TENOR_API_KEY']
     ],
 ]);
