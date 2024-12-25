@@ -96,8 +96,11 @@ class TenorCrawler extends CrawlerService
                             }
                             $tags = array_unique(array_filter($tags));
 
+                            $imageContent = $response->getBody()->getContents();
+                            $imageHash = md5($imageContent);
+
                             // Save meme
-                            if ($this->saveMeme($gifUrl, $tags, $language, $width, $height)) {
+                            if ($this->saveMeme($gifUrl, $tags, $language, $language, $imageContent, $imageHash)) {
                                 $this->stats['total_saved']++;
                             }
                         } catch (\Exception $e) {
