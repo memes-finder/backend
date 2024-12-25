@@ -41,20 +41,17 @@ class TenorCrawler extends CrawlerService
     /**
      * Crawl memes from Tenor
      */
-    public function crawl(string $language = 'en'): void
+    public function crawl(): void
     {
         try {
             $queries = $this->getSearchQueries();
-            if (!isset($queries[$language])) {
-                throw new \Exception("No search queries defined for language: $language");
-            }
 
             $client = new Client([
                 'base_uri' => self::API_BASE,
                 'timeout' => 30,
             ]);
 
-            foreach ($queries[$language] as $query) {
+            foreach ($queries as $language => $query) {
                 $pos = null;
                 for ($page = 1; $page <= self::MAX_PAGES; $page++) {
                     $queryParams = [
@@ -115,7 +112,7 @@ class TenorCrawler extends CrawlerService
                             $imageHash = md5($imageContent);
 
                             // Save meme
-                            if ($meme = $this->saveMeme($gifUrl, $tags, $language, $language, $imageContent, $imageHash)) {
+                            if ($meme = $this->saveMeme($gifUrl, $tags, $this->sourceName, $language, $imageContent, $imageHash)) {
                                 $this->stats['total_saved']++;
                                 echo "Meme $meme->id saved successfully!\n";
                             }
