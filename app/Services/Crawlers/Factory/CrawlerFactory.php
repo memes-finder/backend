@@ -4,12 +4,14 @@ namespace App\Services\Crawlers\Factory;
 
 use App\Services\Crawlers\Interfaces\CrawlerInterface;
 use App\Services\Crawlers\GoogleImagesCrawler;
+use App\Services\Crawlers\TenorCrawler;
 use InvalidArgumentException;
 
 class CrawlerFactory
 {
-    public const CRAWLER_FACEBOOK = 'facebook';
     public const CRAWLER_GOOGLE = 'google';
+
+    public const CRAWLER_TENOR = 'tenor';
     
     /**
      * Create a new crawler instance
@@ -23,6 +25,8 @@ class CrawlerFactory
         switch ($type) {
             case self::CRAWLER_GOOGLE:
                 return new GoogleImagesCrawler();
+            case self::CRAWLER_TENOR:
+                return new TenorCrawler();
             default:
                 throw new InvalidArgumentException("Invalid crawler type: {$type}");
         }
@@ -35,7 +39,7 @@ class CrawlerFactory
     public static function getAvailableTypes(): array
     {
         return [
-            self::CRAWLER_FACEBOOK => 'Facebook Crawler',
+            self::CRAWLER_TENOR => 'Tenor Crawler',
             self::CRAWLER_GOOGLE => 'Google Images Crawler',
         ];
     }

@@ -37,4 +37,7 @@ return new \Phalcon\Config([
     'openai' => [
         'api_key' => $_ENV['OPENAI_API_KEY'] ?? null
     ],
+    'tenor' => [
+        'api_key' => getenv('TENOR_API_KEY')
+    ],
 ]);

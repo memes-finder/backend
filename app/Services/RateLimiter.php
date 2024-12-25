@@ -38,10 +38,10 @@ class RateLimiter extends Injectable
         $this->redis->zCount($key, $windowStart, $now);
 
         // Add current request
-        $x = $this->redis->zAdd($key, $now, uniqid());
+        $this->redis->zAdd($key, $now, uniqid());
 
         // Set expiry on the key
-        $this->redis->expire($key, self::WINDOW_SIZE * 2);
+        $this->redis->expire($key, 60);
 
         // Execute transaction
         $results = $this->redis->exec();
