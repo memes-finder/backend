@@ -55,21 +55,34 @@ class TenorCrawler extends CrawlerService
             ]);
 
             foreach ($queries[$language] as $query) {
+                $pos = null;
                 for ($page = 1; $page <= self::MAX_PAGES; $page++) {
+                    $queryParams = [
+                        'q' => $query,
+                        'key' => $this->config->tenor->api_key,
+                        'client_key' => 'memes',
+                        'media_filter' => 'gif',
+                        'limit' => self::ITEMS_PER_PAGE
+                    ];
+
+                    // Add pos parameter for pagination if we have it
+                    if ($pos !== null) {
+                        $queryParams['pos'] = $pos;
+                    }
+
                     $response = $client->get('search', [
-                        'query' => [
-                            'q' => $query,
-                            'key' => $this->config->tenor->api_key,
-                            'client_key' => 'memes',
-                            'media_filter' => 'gif',
-                            'limit' => self::ITEMS_PER_PAGE,
-                            'pos' => ($page - 1) * self::ITEMS_PER_PAGE
-                        ]
+                        'query' => $queryParams
                     ]);
 
                     $data = json_decode($response->getBody(), true);
                     if (empty($data['results'])) {
                         break;
+                    }
+
+                    // Get the next position for pagination
+                    $pos = $data['next'] ?? null;
+                    if ($pos === null) {
+                        break; // No more results available
                     }
 
                     foreach ($data['results'] as $result) {
@@ -98,7 +111,7 @@ class TenorCrawler extends CrawlerService
                             $tags = array_unique(array_filter($tags));
                             $tags = array_combine($tags, array_fill(0, count($tags), 0.9));
 
-                            $imageContent = $response->getBody()->getContents();
+                            $imageContent = file_get_contents($gifUrl);
                             $imageHash = md5($imageContent);
 
                             // Save meme
