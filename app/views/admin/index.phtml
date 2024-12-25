@@ -95,16 +95,61 @@
     <?php if ($memes->total_items > 0): ?>
     <nav class="mt-4">
         <ul class="pagination justify-content-center">
-            <li class="page-item <?= $memes->current == 1 ? 'disabled' : '' ?>">
-                <a class="page-link" href="?page=<?= $memes->before ?><?= $status ? "&status=$status" : '' ?><?= $searchQuery ? "&q=" . urlencode($searchQuery) : '' ?>">Previous</a>
+            <!-- Previous button -->
+            <li class="page-item <?= $currentPage == 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="?page=<?= max(1, $currentPage - 1) ?><?= $status ? "&status=$status" : '' ?><?= $searchQuery ? "&q=" . urlencode($searchQuery) : '' ?>">Previous</a>
             </li>
-            <?php for ($i = 1; $i <= ceil($memes->total_items / $memes->limit); $i++): ?>
-                <li class="page-item <?= $memes->current == $i ? 'active' : '' ?>">
-                    <a class="page-link" href="?page=<?= $i ?><?= $status ? "&status=$status" : '' ?><?= $searchQuery ? "&q=" . urlencode($searchQuery) : '' ?>"><?= $i ?></a>
-                </li>
-            <?php endfor; ?>
-            <li class="page-item <?= $memes->current >= ceil($memes->total_items / $memes->limit) ? 'disabled' : '' ?>">
-                <a class="page-link" href="?page=<?= $memes->next ?><?= $status ? "&status=$status" : '' ?><?= $searchQuery ? "&q=" . urlencode($searchQuery) : '' ?>">Next</a>
+
+            <?php
+            $totalPages = ceil($memes->total_items / $memes->limit);
+            $currentPage = $memes->current;
+            $range = 2; // Show 2 pages before and after current page
+            
+            // Calculate range of pages to show
+            $startPage = max(1, $currentPage - $range);
+            $endPage = min($totalPages, $currentPage + $range);
+            
+            // Always show first page
+            if ($startPage > 1) {
+                echo '<li class="page-item">';
+                echo '<a class="page-link" href="?page=1' . 
+                     ($status ? "&status=$status" : '') . 
+                     ($searchQuery ? "&q=" . urlencode($searchQuery) : '') . 
+                     '">1</a>';
+                echo '</li>';
+                
+                if ($startPage > 2) {
+                    echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                }
+            }
+            
+            // Show page numbers
+            for ($i = $startPage; $i <= $endPage; $i++) {
+                echo '<li class="page-item ' . ($currentPage == $i ? 'active' : '') . '">';
+                echo '<a class="page-link" href="?page=' . $i . 
+                     ($status ? "&status=$status" : '') . 
+                     ($searchQuery ? "&q=" . urlencode($searchQuery) : '') . 
+                     '">' . $i . '</a>';
+                echo '</li>';
+            }
+            
+            // Always show last page
+            if ($endPage < $totalPages) {
+                if ($endPage < $totalPages - 1) {
+                    echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                }
+                echo '<li class="page-item">';
+                echo '<a class="page-link" href="?page=' . $totalPages . 
+                     ($status ? "&status=$status" : '') . 
+                     ($searchQuery ? "&q=" . urlencode($searchQuery) : '') . 
+                     '">' . $totalPages . '</a>';
+                echo '</li>';
+            }
+            ?>
+            
+            <!-- Next button -->
+            <li class="page-item <?= $currentPage >= $totalPages ? 'disabled' : '' ?>">
+                <a class="page-link" href="?page=<?= min($totalPages, $currentPage + 1) ?><?= $status ? "&status=$status" : '' ?><?= $searchQuery ? "&q=" . urlencode($searchQuery) : '' ?>">Next</a>
             </li>
         </ul>
     </nav>
