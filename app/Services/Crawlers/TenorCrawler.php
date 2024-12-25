@@ -11,6 +11,8 @@ class TenorCrawler extends CrawlerService
     private const MAX_PAGES = 10;
     private const API_BASE = 'https://tenor.googleapis.com/v2/';
 
+    protected string $sourceName = 'tenor';
+
     /**
      * Get search queries by language
      */
@@ -80,8 +82,6 @@ class TenorCrawler extends CrawlerService
                             }
 
                             $gifUrl = $result['media_formats']['gif']['url'];
-                            $width = $result['media_formats']['gif']['dims'][0] ?? 0;
-                            $height = $result['media_formats']['gif']['dims'][1] ?? 0;
 
                             // Extract tags
                             $tags = [];
@@ -94,14 +94,17 @@ class TenorCrawler extends CrawlerService
                                     $this->extractTags($result['content_description'], $language)
                                 );
                             }
+
                             $tags = array_unique(array_filter($tags));
+                            $tags = array_combine($tags, array_fill(0, count($tags), 0.9));
 
                             $imageContent = $response->getBody()->getContents();
                             $imageHash = md5($imageContent);
 
                             // Save meme
-                            if ($this->saveMeme($gifUrl, $tags, $language, $language, $imageContent, $imageHash)) {
+                            if ($meme = $this->saveMeme($gifUrl, $tags, $language, $language, $imageContent, $imageHash)) {
                                 $this->stats['total_saved']++;
+                                echo "Meme $meme->id saved successfully!\n";
                             }
                         } catch (\Exception $e) {
                             $this->logger->error(

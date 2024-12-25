@@ -133,15 +133,6 @@ abstract class CrawlerService implements CrawlerInterface
                 $memeTag->created_at = $now;
                 $memeTag->origin = $tagsOrigin;
                 $memeTag->save();
-
-                // Index in RedisSearch
-                $this->di->get('searchService')->indexTag(
-                    $meme->id,
-                    $tag,
-                    $language,
-                    $confidence,
-                    $now
-                );
             }
 
             return $meme;
