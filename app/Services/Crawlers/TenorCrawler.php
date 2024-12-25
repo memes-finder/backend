@@ -27,12 +27,12 @@ class TenorCrawler extends CrawlerService
                 'عادل امام',
                 'عادل امام',
             ],
-            'en' => [
-                'gangster',
-                'babies',
-                'musician',
-                'work memes'
-            ]
+//            'en' => [
+//                'gangster',
+//                'babies',
+//                'musician',
+//                'work memes'
+//            ]
         ];
 
         return $searchQueries;
