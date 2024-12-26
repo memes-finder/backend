@@ -206,12 +206,7 @@ class Memes extends Model
         // Implement CDN URL generation based on file_path
         $config = $this->getDI()->get('config');
         // Example implementation - modify based on your CDN setup
-        return sprintf(
-            'https://%s.s3.%s.amazonaws.com/%s',
-            $config->aws->bucket,
-            $config->aws->region,
-            $this->file_path
-        );
+        return sprintf('https://cdn.memesplanet.com/%s', $this->file_path);
     }
 
     /**
