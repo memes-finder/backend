@@ -15,24 +15,18 @@ class RegenerateTagsTask extends Task
         $this->println("Starting {$taggingService} AI tag regeneration...");
 
         // Get memes that don't have AI-generated tags
-        $memes = Memes::find([
-            'conditions' => '(
-                id IN (
-                    SELECT meme_id
-                    FROM \App\Models\MemeTags
-                    GROUP BY meme_id
-                    HAVING COUNT(DISTINCT \App\Models\MemeTags.id) < 5
-                )
-                OR
-                id NOT IN (
-                    SELECT DISTINCT meme_id
-                    FROM \App\Models\MemeTags
-                )
-            ) AND status = :status:',
-            'bind' => [
+        $memes = Memes::query()->conditions(
+            'id NOT IN (
+                SELECT meme_id
+                FROM \App\Models\MemeTags
+                GROUP BY meme_id
+                HAVING COUNT(DISTINCT \App\Models\MemeTags.id) > 5 AND COUNT(\App\Models\MemeTags.language = \'arabic\') > 5
+            )
+            AND status = :status:')
+            ->bind([
                 'status' => Memes::STATUS_APPROVED
-            ]
-        ]);
+            ])
+            ->execute();
 
 
         $total = count($memes);

@@ -1,8 +1,7 @@
 <?php
 
 return new \Phalcon\Config([
-    'database' => [
-        'adapter'  => 'Mysql',
+    'mysql' => [
         'host'     => $_ENV['DB_HOST'] ?? 'mysql',
         'username' => $_ENV['DB_USERNAME'] ?? 'memes_user',
         'password' => $_ENV['DB_PASSWORD'] ?? 'memes_password',
@@ -17,6 +16,7 @@ return new \Phalcon\Config([
         'cacheDir'       => BASE_PATH . '/storage/cache/',
         'sessionSavePath'=> BASE_PATH . '/storage/sessions/',
         'logPath'        => BASE_PATH . '/storage/logs/app.log',
+        'debug'          => $_ENV['APP_ENV'] == 'development'
     ],
     'redis' => [
         'host' => $_ENV['REDIS_HOST'] ?? 'redis',

@@ -5,6 +5,9 @@ use App\Redis\Connector;
 use Aws\S3\S3Client;
 use Ehann\RediSearch\Index;
 use Ehann\RediSearch\Suggestion;
+use Phalcon\Db\Adapter\PdoFactory;
+use Phalcon\Events\Event;
+use Phalcon\Events\Manager;
 use Phalcon\Logger\AdapterFactory;
 use Phalcon\Logger\LoggerFactory;
 use Phalcon\Mvc\View;
@@ -27,16 +30,29 @@ $di->setShared('config', function () {
 $di->setShared('db', function () {
     $config = $this->getConfig();
 
-    $class = 'Phalcon\Db\Adapter\Pdo\\' . $config->database->adapter;
-    $params = [
-        'host'     => $config->database->host,
-        'username' => $config->database->username,
-        'password' => $config->database->password,
-        'dbname'   => $config->database->dbname,
-        'charset'  => $config->database->charset
-    ];
+    $connection = (new PdoFactory())->newInstance('mysql', $config->mysql->toArray());
 
-    return new $class($params);
+    if ($config->application->debug) {
+        $logger = $this->getLogger('query.log');
+        $manager = new Manager();
+
+        $manager->attach(
+            'db:beforeQuery',
+            function (Event $event, $connection) use ($logger) {
+                $logger->info(
+                    sprintf(
+                        '%s - [%s]',
+                        $connection->getSQLStatement(),
+                        json_encode($connection->getSQLVariables())
+                    )
+                );
+            }
+        );
+
+        $connection->setEventsManager($manager);
+    }
+
+    return $connection;
 });
 
 /**
@@ -107,28 +123,19 @@ $di->setShared('cookies', function () {
 /**
  * Logger service
  */
-$di->setShared('logger', function () {
-    $logPath = BASE_PATH . '/storage/logs/errors.log';
-    $logger = new \Phalcon\Logger\Adapter\Stream($logPath);
-    return $logger;
-});
-
-/**
- * Logger service
- */
-$di->setShared('logger', function () {
+$di->setShared('logger', function ($file = 'errors.log') {
     // Create logs directory if it doesn't exist
     $logPath = BASE_PATH . '/storage/logs';
     if (!is_dir($logPath)) {
         mkdir($logPath, 0777, true);
     }
 
-    if (!file_exists($logPath . '/errors.log')) {
-        touch($logPath . '/errors.log');
+    if (!file_exists($logPath . DIRECTORY_SEPARATOR . $file)) {
+        touch($logPath . DIRECTORY_SEPARATOR . $file);
     }
 
     $adapters = [
-        "main" => new FileLogger($logPath . '/errors.log')
+        "main" => new FileLogger($logPath . DIRECTORY_SEPARATOR  . $file)
     ];
 
     $adapterFactory = new AdapterFactory();
