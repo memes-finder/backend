@@ -499,6 +499,13 @@ class AdminController extends ControllerBase
             ]);
 
         } catch (\Exception $e) {
+            $this->logger->error(
+                sprintf(
+                    "%s\nTrace:\n%s",
+                    $e->getMessage(),
+                    $e->getTraceAsString()
+                )
+            );
             return $this->response->setStatusCode(400)
                 ->setJsonContent(['error' => $e->getMessage()]);
         }
