@@ -2,6 +2,7 @@
 vendor/*
 storage/cache/*
 storage/logs/*
+storage/chunks/*
 .idea
 schema.sql
 creds/*

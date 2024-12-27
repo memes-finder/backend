@@ -71,8 +71,7 @@ abstract class CrawlerService implements CrawlerInterface
         try {
             // Download image if not provided
             if (!$imageContent) {
-                $response = $this->httpClient->get($imageUrl);
-                $imageContent = $response->getBody()->getContents();
+                $imageContent = file_get_contents($imageUrl);
                 $imageHash = md5($imageContent);
             }
 

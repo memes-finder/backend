@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Models\Memes;
 use App\Models\MemeTags;
+use App\Models\QueuedUploads;
 use App\Services\TaggingServices\TaggingServiceFactory;
 use App\Services\TaggingServices\TaggingServiceInterface;
 
@@ -430,6 +431,111 @@ class AdminController extends ControllerBase
                 $this->flash->error('Upload failed: ' . $e->getMessage());
             }
         }
+    }
+
+    public function uploadChunkAction()
+    {
+        if (!$this->view->isLoggedIn) {
+            return $this->response->setStatusCode(401)
+                ->setJsonContent(['error' => 'Unauthorized']);
+        }
+
+        try {
+            if (!$this->request->hasFiles()) {
+                throw new \Exception('No chunk uploaded');
+            }
+
+            $fileId = $this->request->getPost('fileId');
+            $totalChunks = (int)$this->request->getPost('totalChunks');
+            $chunkNumber = (int)$this->request->getPost('chunkNumber');
+            $originalName = $this->request->getPost('originalName');
+            $mimeType = $this->request->getPost('mimeType');
+
+            if (!$fileId || !$totalChunks || !isset($chunkNumber)) {
+                throw new \Exception('Missing chunk information');
+            }
+
+            $chunk = $this->request->getUploadedFiles()[0];
+            $chunkService = new \App\Services\ChunkUploadService();
+            
+            // Process the chunk
+            $result = $chunkService->handleChunk($fileId, $chunk, $totalChunks, $chunkNumber, $originalName, $mimeType);
+            
+            if ($result) {
+                if ($result['type'] === 'zip') {
+                    // Queue the ZIP for processing
+                    $upload = new \App\Models\QueuedUploads();
+                    $upload->original_name = $originalName;
+                    $upload->extract_path = $result['path'];
+                    $upload->save();
+
+                    return $this->response->setJsonContent([
+                        'status' => 'complete',
+                        'success' => true,
+                        'message' => 'ZIP file queued for processing. You will be notified when processing is complete.'
+                    ]);
+                } else {
+                    // Process single image immediately
+                    $successCount = 0;
+                    $errorCount = 0;
+                    $errors = [];
+                    
+                    $this->processImage($result['path'], $originalName, $successCount, $errorCount, $errors);
+                    unlink($result['path']); // Clean up temporary file
+                    
+                    return $this->response->setJsonContent([
+                        'status' => 'complete',
+                        'success' => $successCount > 0,
+                        'message' => $successCount > 0 ? 
+                            "Successfully uploaded {$successCount} " . ($successCount === 1 ? 'meme' : 'memes') : 
+                            implode(', ', $errors)
+                    ]);
+                }
+            }
+
+            return $this->response->setJsonContent([
+                'status' => 'chunk_received',
+                'chunk' => $chunkNumber
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->response->setStatusCode(400)
+                ->setJsonContent(['error' => $e->getMessage()]);
+        }
+    }
+
+    public function uploadStatusAction()
+    {
+        if (!$this->view->isLoggedIn) {
+            return $this->response->setStatusCode(401)
+                ->setJsonContent(['error' => 'Unauthorized']);
+        }
+
+        // Get latest uploads
+        $uploads = \App\Models\QueuedUploads::find([
+            'conditions' => 'created_at >= :since:',
+            'bind' => [
+                'since' => date('Y-m-d H:i:s', strtotime('-1 hour'))
+            ],
+            'order' => 'created_at DESC',
+            'limit' => 10
+        ]);
+
+        $results = [];
+        foreach ($uploads as $upload) {
+            $results[] = [
+                'id' => $upload->id,
+                'filename' => $upload->original_name,
+                'status' => $upload->status,
+                'processed' => $upload->processed_count,
+                'errors' => $upload->error_count,
+                'message' => $upload->error_message,
+                'created_at' => $upload->created_at,
+                'completed_at' => $upload->completed_at
+            ];
+        }
+
+        return $this->response->setJsonContent($results);
     }
 
     /**
