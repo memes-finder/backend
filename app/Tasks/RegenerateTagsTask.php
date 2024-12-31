@@ -14,7 +14,10 @@ class RegenerateTagsTask extends Task
     {
         $this->println("Starting {$taggingService} AI tag regeneration...");
 
-        // Get memes that don't have AI-generated tags
+        /**
+         * Get memes that don't have AI-generated tags
+         * @var $memes Memes[]
+         */
         $memes = Memes::query()->conditions(
             'id NOT IN (
                 SELECT meme_id
@@ -43,7 +46,14 @@ class RegenerateTagsTask extends Task
                 $this->println("Processing meme $meme->id ($processed/$total)");
 
                 // Generate new tags
-                $tags = $aiService->generateTags($meme->getPublicUrl());
+                if ($meme->meme_type == 'video') {
+                    $image = $meme->getThumbnailUrl();
+                } else {
+                    $image = $meme->getPublicUrl();
+                }
+
+                $tags = $aiService->generateTags($image);
+
                 $now = date('Y-m-d H:i:s');
 
                 // Save generated tags
