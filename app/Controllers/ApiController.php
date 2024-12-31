@@ -101,24 +101,24 @@ class ApiController extends BaseApiController
                         ]
                     ];
                 }
+
+                // Get total count of approved memes
+                $totalApprovedCount = Memes::count([
+                    'conditions' => 'id IN ({ids:array})',
+                    'bind' => [
+                        'ids' => $totalMemeIds
+                    ]
+                ]);
+
+                // Update search log with results count
+                $searchLog->results_count = $totalApprovedCount;
+                $searchLog->save();
             }
-
-            // Get total count of approved memes
-            $totalApprovedCount = Memes::count([
-                'conditions' => 'id IN ({ids:array})',
-                'bind' => [
-                    'ids' => $totalMemeIds
-                ]
-            ]);
-
-            // Update search log with results count
-            $searchLog->results_count = $totalApprovedCount;
-            $searchLog->save();
 
             return $this->response->setJsonContent([
                 'status' => 'success',
                 'data' => [
-                    'total' => $totalApprovedCount,
+                    'total' => $totalApprovedCount ?? 0,
                     'page' => $page,
                     'limit' => $limit,
                     'language' => $responseLanguage,

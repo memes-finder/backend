@@ -60,6 +60,12 @@ $router->addGet('/api/tags/trending', [
     'action' => 'trending'
 ]);
 
+// Lambda API routes
+$router->addPost('/api/lambda/video', [
+    'controller' => 'lambda',
+    'action' => 'createFromVideo'
+]);
+
 // Main page
 $router->add('/', [
     'controller' => 'pages',

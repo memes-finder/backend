@@ -51,6 +51,21 @@ class Memes extends Model
     public $mime_type;
 
     /**
+     * @var string
+     */
+    public $meme_type;
+
+    /**
+     * @var string|null
+     */
+    public $thumbnail;
+
+    /**
+     * @var float|null
+     */
+    public $duration;
+
+    /**
      * @var string|null
      */
     public $source_url_hash;
