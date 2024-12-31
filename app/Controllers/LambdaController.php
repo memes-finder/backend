@@ -66,6 +66,7 @@ class LambdaController extends BaseApiController
             $meme->file_size = $payload->file_size;
             $meme->file_hash = $payload->file_hash;
             $meme->mime_type = $payload->mime_type;
+            $meme->meme_type = 'video';
             $meme->thumbnail = $payload->thumbnail_path;
             $meme->source_type = 'lambda_upload';
             $meme->status = Memes::STATUS_PENDING;
