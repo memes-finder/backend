@@ -38,6 +38,7 @@ class ApiController extends BaseApiController
         try {
             $query = $this->request->getQuery('q', 'string', '');
             $tags = $this->request->getQuery('tags', 'string', '');
+            $type = $this->request->getQuery('type', 'string', 'image');
             $page = $this->request->getQuery('page', 'int', 1);
             $limit = $this->request->getQuery('limit', 'int', 20);
             $offset = ($page - 1) * $limit;
@@ -79,9 +80,10 @@ class ApiController extends BaseApiController
             if (!empty($memeIds)) {
                 /** @var Memes[] $memes */
                 $memes = Memes::find([
-                    'id IN ({ids:array})',
+                    'id IN ({ids:array}) AND meme_type = :type:',
                     'bind' => [
-                        'ids' => $memeIds
+                        'ids'   => $memeIds,
+                        'type'  => $type
                     ]
                 ]);
 
@@ -122,6 +124,7 @@ class ApiController extends BaseApiController
                     'page' => $page,
                     'limit' => $limit,
                     'language' => $responseLanguage,
+                    'type' => $type,
                     'items' => $formattedResults
                 ]
             ]);
@@ -140,7 +143,8 @@ class ApiController extends BaseApiController
                     'tags' => $tags ?? null,
                     'page' => $page ?? null,
                     'limit' => $limit ?? null,
-                    'language' => $responseLanguage ?? null
+                    'language' => $responseLanguage ?? null,
+                    'type' => $type ?? null
                 ]
             );
 
