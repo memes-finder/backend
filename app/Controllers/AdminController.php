@@ -40,7 +40,7 @@ class AdminController extends ControllerBase
             $currentPage = $this->request->getQuery('page', 'int', 1);
             $status = $this->request->getQuery('status', 'string', '');
             $searchQuery = $this->request->getQuery('q', 'string', '');
-            $memeType = $this->request->getQuery('type', 'string', '');
+            $memeType = $this->request->getQuery('type', 'string', 'image');
             $limit = 20;
 
             // Build query conditions

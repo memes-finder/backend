@@ -55,7 +55,21 @@
             ?>
             <div class="col-md-6 col-lg-4">
                 <div class="card meme-card">
-                    <img src="<?= $memeModel->getPublicUrl() ?>" class="card-img-top meme-preview" alt="Meme">
+                    <?php if ($meme['meme_type'] === 'video'): ?>
+                        <div class="position-relative video-preview" data-video-url="<?= $memeModel->getPublicUrl() ?>">
+                            <img src="<?= $memeModel->getThumbnailUrl() ?>" class="card-img-top meme-preview" alt="Video Thumbnail" style="pointer-events: none;">
+                            <div class="position-absolute top-50 start-50 translate-middle video-play-button">
+                                <i class="bi bi-play-circle-fill text-white" style="font-size: 3rem; text-shadow: 0 0 10px rgba(0,0,0,0.5);"></i>
+                            </div>
+                            <?php if ($meme['duration']): ?>
+                                <div class="position-absolute bottom-0 end-0 bg-dark bg-opacity-75 text-white px-2 py-1 m-2 rounded">
+                                    <?= gmdate("i:s", (int)$meme['duration']) ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php else: ?>
+                        <img src="<?= $memeModel->getPublicUrl() ?>" class="card-img-top meme-preview" alt="Meme">
+                    <?php endif; ?>
                     <div class="card-body">
                         <h6 class="card-subtitle mb-2 text-muted">ID: <?= $meme['id'] ?></h6>
                         <p class="card-text">

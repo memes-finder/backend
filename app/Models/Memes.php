@@ -218,10 +218,18 @@ class Memes extends Model
      */
     public function getPublicUrl()
     {
-        // Implement CDN URL generation based on file_path
-        $config = $this->getDI()->get('config');
         // Example implementation - modify based on your CDN setup
         return sprintf('https://cdn.memesplanet.com/%s', $this->file_path);
+    }
+
+    /**
+     * Get public URL for the meme
+     * @return string
+     */
+    public function getThumbnailUrl()
+    {
+        // Example implementation - modify based on your CDN setup
+        return sprintf('https://cdn.memesplanet.com/%s', $this->thumbnail);
     }
 
     /**
