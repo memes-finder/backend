@@ -61,9 +61,7 @@ class LambdaController extends BaseApiController
 
             // Create meme record
             $meme = new Memes();
-            $meme->file_path = $payload->filename;
-            $meme->width = $payload->width;
-            $meme->height = $payload->height;
+            $meme->file_path = $payload->file_path;
             $meme->duration = $payload->duration;
             $meme->file_size = $payload->file_size;
             $meme->file_hash = $payload->file_hash;
