@@ -6,6 +6,10 @@
                 <input type="hidden" name="status" value="<?= $status ?>">
                 <?php endif; ?>
                 
+                <?php if ($memeType): ?>
+                <input type="hidden" name="type" value="<?= $memeType ?>">
+                <?php endif; ?>
+                
                 <div class="flex-grow-1">
                     <div class="input-group">
                         <input type="text" name="q" class="form-control" placeholder="Search by tag..." value="<?= $this->escaper->escapeHtmlAttr($searchQuery ?? '') ?>">
@@ -16,10 +20,16 @@
                     </div>
                 </div>
 
+                <div class="btn-group me-2">
+                    <a href="<?= $searchQuery ? "?q=" . urlencode($searchQuery) : '/admin' ?>" class="btn <?= empty($status) ? 'btn-primary' : 'btn-outline-primary' ?>">All</a>
+                    <a href="?status=pending<?= $searchQuery ? "&q=" . urlencode($searchQuery) : '' ?><?= $memeType ? "&type=$memeType" : '' ?>" class="btn <?= $status === 'pending' ? 'btn-primary' : 'btn-outline-primary' ?>">Pending</a>
+                    <a href="?status=approved<?= $searchQuery ? "&q=" . urlencode($searchQuery) : '' ?><?= $memeType ? "&type=$memeType" : '' ?>" class="btn <?= $status === 'approved' ? 'btn-primary' : 'btn-outline-primary' ?>">Approved</a>
+                </div>
+
                 <div class="btn-group">
-                    <a href="/admin" class="btn <?= empty($status) ? 'btn-primary' : 'btn-outline-primary' ?>">All</a>
-                    <a href="?status=pending" class="btn <?= $status === 'pending' ? 'btn-primary' : 'btn-outline-primary' ?>">Pending</a>
-                    <a href="?status=approved" class="btn <?= $status === 'approved' ? 'btn-primary' : 'btn-outline-primary' ?>">Approved</a>
+                    <a href="<?= $status ? "?status=$status" : '' ?><?= $searchQuery ? "&q=" . urlencode($searchQuery) : '' ?>" class="btn <?= empty($memeType) ? 'btn-primary' : 'btn-outline-primary' ?>">All Types</a>
+                    <a href="?type=image<?= $status ? "&status=$status" : '' ?><?= $searchQuery ? "&q=" . urlencode($searchQuery) : '' ?>" class="btn <?= $memeType === 'image' ? 'btn-primary' : 'btn-outline-primary' ?>">Images</a>
+                    <a href="?type=video<?= $status ? "&status=$status" : '' ?><?= $searchQuery ? "&q=" . urlencode($searchQuery) : '' ?>" class="btn <?= $memeType === 'video' ? 'btn-primary' : 'btn-outline-primary' ?>">Videos</a>
                 </div>
             </form>
         </div>
@@ -97,7 +107,7 @@
         <ul class="pagination justify-content-center">
             <!-- Previous button -->
             <li class="page-item <?= $currentPage == 1 ? 'disabled' : '' ?>">
-                <a class="page-link" href="?page=<?= max(1, $currentPage - 1) ?><?= $status ? "&status=$status" : '' ?><?= $searchQuery ? "&q=" . urlencode($searchQuery) : '' ?>">Previous</a>
+                <a class="page-link" href="?page=<?= max(1, $currentPage - 1) ?><?= $status ? "&status=$status" : '' ?><?= $searchQuery ? "&q=" . urlencode($searchQuery) : '' ?><?= $memeType ? "&type=$memeType" : '' ?>">Previous</a>
             </li>
 
             <?php
@@ -115,6 +125,7 @@
                 echo '<a class="page-link" href="?page=1' . 
                      ($status ? "&status=$status" : '') . 
                      ($searchQuery ? "&q=" . urlencode($searchQuery) : '') . 
+                     ($memeType ? "&type=$memeType" : '') . 
                      '">1</a>';
                 echo '</li>';
                 
@@ -129,6 +140,7 @@
                 echo '<a class="page-link" href="?page=' . $i . 
                      ($status ? "&status=$status" : '') . 
                      ($searchQuery ? "&q=" . urlencode($searchQuery) : '') . 
+                     ($memeType ? "&type=$memeType" : '') . 
                      '">' . $i . '</a>';
                 echo '</li>';
             }
@@ -142,6 +154,7 @@
                 echo '<a class="page-link" href="?page=' . $totalPages . 
                      ($status ? "&status=$status" : '') . 
                      ($searchQuery ? "&q=" . urlencode($searchQuery) : '') . 
+                     ($memeType ? "&type=$memeType" : '') . 
                      '">' . $totalPages . '</a>';
                 echo '</li>';
             }
@@ -149,7 +162,7 @@
             
             <!-- Next button -->
             <li class="page-item <?= $currentPage >= $totalPages ? 'disabled' : '' ?>">
-                <a class="page-link" href="?page=<?= min($totalPages, $currentPage + 1) ?><?= $status ? "&status=$status" : '' ?><?= $searchQuery ? "&q=" . urlencode($searchQuery) : '' ?>">Next</a>
+                <a class="page-link" href="?page=<?= min($totalPages, $currentPage + 1) ?><?= $status ? "&status=$status" : '' ?><?= $searchQuery ? "&q=" . urlencode($searchQuery) : '' ?><?= $memeType ? "&type=$memeType" : '' ?>">Next</a>
             </li>
         </ul>
     </nav>

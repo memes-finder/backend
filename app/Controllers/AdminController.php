@@ -40,6 +40,7 @@ class AdminController extends ControllerBase
             $currentPage = $this->request->getQuery('page', 'int', 1);
             $status = $this->request->getQuery('status', 'string', '');
             $searchQuery = $this->request->getQuery('q', 'string', '');
+            $memeType = $this->request->getQuery('type', 'string', '');
             $limit = 20;
 
             // Build query conditions
@@ -51,6 +52,12 @@ class AdminController extends ControllerBase
             if ($status) {
                 $conditions[] = 'status = :status:';
                 $binds['status'] = $status;
+            }
+
+            // Add meme type condition if selected
+            if ($memeType) {
+                $conditions[] = 'meme_type = :meme_type:';
+                $binds['meme_type'] = $memeType;
             }
 
             // If search query exists, get meme IDs from search service
@@ -86,6 +93,7 @@ class AdminController extends ControllerBase
             $this->view->memes = $page;
             $this->view->status = $status;
             $this->view->searchQuery = $searchQuery;
+            $this->view->memeType = $memeType;
         } catch (\Exception $e) {
             // Log general error
             $this->di->get('logger')->error(
@@ -99,7 +107,8 @@ class AdminController extends ControllerBase
                 [
                     'page' => $currentPage ?? null,
                     'status' => $status ?? null,
-                    'query' => $searchQuery ?? null
+                    'query' => $searchQuery ?? null,
+                    'type' => $memeType ?? null
                 ]
             );
 
