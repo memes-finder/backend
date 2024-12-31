@@ -40,7 +40,7 @@ class LambdaController extends BaseApiController
             }
 
             // Validate required fields
-            $requiredFields = ['file_name', 'duration', 'file_size', 'file_hash', 'mime_type', 'thumbnail_url'];
+            $requiredFields = ['file_name', 'file_path', 'file_size', 'file_hash', 'mime_type', 'thumbnail_path', 'duration'];
             foreach ($requiredFields as $field) {
                 if (!isset($payload->$field)) {
                     return $this->response
