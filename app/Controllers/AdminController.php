@@ -317,6 +317,7 @@ class AdminController extends ControllerBase
             return $this->response->redirect('/admin');
         }
 
+        /** @var Memes $meme */
         $meme = Memes::findFirst($memeId);
         if (!$meme) {
             $this->flash->error("Meme not found");
@@ -326,9 +327,17 @@ class AdminController extends ControllerBase
         try {
             /** @var TaggingServiceInterface $aiService */
             $aiService = TaggingServiceFactory::create($taggingService);
+
+            if ($meme->meme_type == 'image') {
+                $imageUrl = $meme->getPublicUrl();
+            } elseif ($meme->meme_type == 'video') {
+                $imageUrl = $meme->getThumbnailUrl();
+            } else {
+                throw new \Exception("Invalid meme type {$meme->meme_type}");
+            }
             
             // Generate tags using AI
-            $tags = $aiService->generateTags($meme->getPublicUrl());
+            $tags = $aiService->generateTags($imageUrl);
             $now = date('Y-m-d H:i:s');
             
             // Save generated tags
