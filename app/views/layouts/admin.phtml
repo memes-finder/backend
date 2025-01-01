@@ -249,21 +249,27 @@
             }
 
             // Handle video thumbnail clicks
-            document.querySelectorAll('.video-preview').forEach(preview => {
-                preview.addEventListener('click', function() {
-                    const videoUrl = this.dataset.videoUrl;
-                    playVideo(videoUrl);
-                    videoModal.show();
+            document.querySelectorAll('.video-play-button, .video-preview').forEach(button => {
+                button.addEventListener('click', function() {
+                    const videoUrl = this.getAttribute('data-video-url');
+                    if (videoUrl) {
+                        playVideo(videoUrl);
+                        videoModal.show();
+                    }
                 });
             });
 
-            // Reset video when modal is closed
-            document.getElementById('videoModal').addEventListener('hidden.bs.modal', function() {
+            // When video modal is hidden, pause the video
+            document.getElementById('videoModal').addEventListener('hidden.bs.modal', function () {
+                const video = document.getElementById('videoPlayer');
+                if (video) {
+                    video.pause();
+                    video.src = '';
+                }
                 if (hls) {
                     hls.destroy();
                     hls = null;
                 }
-                videoPlayer.stop();
             });
 
             // Handle meme approval

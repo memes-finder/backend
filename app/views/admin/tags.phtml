@@ -13,7 +13,26 @@
     <div class="card-body">
         <div class="row">
             <div class="col-md-4">
-                <img src="<?= $meme->getPublicUrl() ?>" class="img-fluid rounded" alt="Meme">
+                <?php if ($meme->meme_type === 'video'): ?>
+                    <div class="video-preview position-relative">
+                        <?php if ($meme->thumbnail): ?>
+                            <img src="<?= $meme->getThumbnailUrl() ?>" class="img-fluid rounded" alt="Video thumbnail">
+                        <?php else: ?>
+                            <img src="<?= $meme->getPublicUrl() ?>?thumb=1" class="img-fluid rounded" alt="Video thumbnail">
+                        <?php endif; ?>
+                        <div class="video-play-button position-absolute top-50 start-50 translate-middle" 
+                             data-bs-toggle="modal" 
+                             data-bs-target="#videoModal" 
+                             data-video-url="<?= $meme->getPublicUrl() ?>">
+                            <i class="fas fa-play-circle fa-3x text-white"></i>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <img src="<?= $meme->getPublicUrl() ?>" class="img-fluid rounded meme-preview" 
+                         data-bs-toggle="modal" 
+                         data-bs-target="#imageZoomModal" 
+                         onclick="document.getElementById('zoomImage').src = this.src;">
+                <?php endif; ?>
             </div>
             <div class="col-md-8">
                 <div class="container mt-4">
