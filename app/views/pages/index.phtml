@@ -82,35 +82,6 @@
         opacity: 1;
     }
 
-    .api-endpoints {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 10px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        text-align: left;
-        font-family: monospace;
-    }
-
-    .endpoint {
-        margin: 0.5rem 0;
-        padding: 0.5rem;
-        border-radius: 5px;
-        background: rgba(255, 255, 255, 0.05);
-    }
-
-    .method {
-        display: inline-block;
-        padding: 0.2rem 0.5rem;
-        border-radius: 3px;
-        margin-right: 0.5rem;
-        font-weight: bold;
-    }
-
-    .get { background: #2ecc71; }
-    .post { background: #3498db; }
-    .put { background: #f1c40f; }
-    .delete { background: #e74c3c; }
-
     @media (max-width: 768px) {
         .logo {
             font-size: 2rem;
@@ -136,22 +107,6 @@
     <div class="api-notice">
         <h1>API-Only Service</h1>
         <p>Welcome to Memes Planet! This is an API-only service that powers our mobile application. We do not provide a web interface for browsing or managing memes.</p>
-        
-        <div class="api-endpoints">
-            <p>Available through our app:</p>
-            <div class="endpoint">
-                <span class="method get">GET</span> /api/memes
-            </div>
-            <div class="endpoint">
-                <span class="method get">GET</span> /api/memes/trending
-            </div>
-            <div class="endpoint">
-                <span class="method get">GET</span> /api/memes/search
-            </div>
-            <div class="endpoint">
-                <span class="method post">POST</span> /api/memes/like
-            </div>
-        </div>
 
         <p>To access our full features and browse our meme collection, please download our official mobile application.</p>
     </div>
