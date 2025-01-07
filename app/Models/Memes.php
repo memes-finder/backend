@@ -104,6 +104,26 @@ class Memes extends Model
             ]
         );
 
+        $this->hasMany(
+            'id',
+            MemeViews::class,
+            'meme_id',
+            [
+                'alias' => 'views',
+                'reusable' => true
+            ]
+        );
+
+        $this->hasMany(
+            'id',
+            MemeLaughs::class,
+            'meme_id',
+            [
+                'alias' => 'likes',
+                'reusable' => true
+            ]
+        );
+
         // Add behaviors
         $this->addBehavior(
             new \Phalcon\Mvc\Model\Behavior\Timestampable([
@@ -243,6 +263,46 @@ class Memes extends Model
     }
 
     /**
+     * Get the total number of views for this meme
+     * @return int
+     */
+    public function getViewCount(): int
+    {
+        return MemeViews::count([
+            'conditions' => 'meme_id = :meme_id:',
+            'bind' => ['meme_id' => $this->id]
+        ]);
+    }
+
+    /**
+     * Get the total number of likes for this meme
+     * @return int
+     */
+    public function getLaughsCount(): int
+    {
+        return MemeLaughs::count([
+            'conditions' => 'meme_id = :meme_id:',
+            'bind' => ['meme_id' => $this->id]
+        ]);
+    }
+
+    /**
+     * Check if the given IP has liked this meme
+     * @param string $ipAddress
+     * @return bool
+     */
+    public function isLikedByIp(string $ipAddress): bool
+    {
+        return MemeLaughs::count([
+            'conditions' => 'meme_id = :meme_id: AND ip_address = :ip:',
+            'bind' => [
+                'meme_id' => $this->id,
+                'ip' => $ipAddress
+            ]
+        ]) > 0;
+    }
+
+    /**
      * Convert meme to array with tags grouped by language
      * @return array
      */
@@ -258,6 +318,8 @@ class Memes extends Model
         
         $data['tags'] = $tags;
         $data['public_url'] = $this->getPublicUrl();
+        $data['view_count'] = $this->getViewCount();
+        $data['like_count'] = $this->getLaughsCount();
         
         return $data;
     }

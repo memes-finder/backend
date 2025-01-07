@@ -2,16 +2,16 @@
 
 namespace App\Controllers;
 
-use App\Services\RateLimiter;
+use App\Services\RateLimitService;
 use Phalcon\Mvc\Controller;
 
 class BaseApiController extends Controller
 {
-    protected RateLimiter $rateLimiter;
+    protected RateLimitService $rateLimiter;
 
     public function onConstruct()
     {
-        $this->rateLimiter = new RateLimiter();
+        $this->rateLimiter = new RateLimitService();
 
         // Check rate limit before processing request
         $clientIp = $this->request->getClientAddress();

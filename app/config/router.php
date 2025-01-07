@@ -60,6 +60,18 @@ $router->addGet('/api/tags/trending', [
     'action' => 'trending'
 ]);
 
+// Meme view
+$router->addPost('/api/memes/view/{id:[0-9]+}', [
+    'controller' => 'api',
+    'action' => 'trackView'
+]);
+
+// Meme laugh
+$router->addPost('/api/memes/laugh/{id:[0-9]+}', [
+    'controller' => 'api',
+    'action' => 'laugh'
+]);
+
 // Lambda API routes
 $router->addPost('/api/lambda/video', [
     'controller' => 'lambda',

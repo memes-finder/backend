@@ -5,9 +5,9 @@ namespace App\Services;
 use Phalcon\Di\Injectable;
 use Redis;
 
-class RateLimiter extends Injectable
+class RateLimitService extends Injectable
 {
-    private const RATE_LIMIT = 60; // requests per second
+    private const RATE_LIMIT = 1; // requests per second
     private const WINDOW_SIZE = 1; // window size in seconds
     private Redis $redis;
 

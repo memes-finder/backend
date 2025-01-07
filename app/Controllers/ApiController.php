@@ -5,6 +5,9 @@ namespace App\Controllers;
 use App\Services\SearchService;
 use App\Models\Memes;
 use App\Models\SearchLogs;
+use App\Models\MemeViews;
+use App\Models\MemeLaughs;
+use Phalcon\Http\ResponseInterface;
 
 class ApiController extends BaseApiController
 {
@@ -92,7 +95,7 @@ class ApiController extends BaseApiController
                     $primaryTags = array_column($meme->getTagsByLanguage($responseLanguage === 'ar' ? 'arabic' : 'english')->toArray(), 'tag');
                     $secondaryTags = array_column($meme->getTagsByLanguage($responseLanguage === 'ar' ? 'english' : 'arabic')->toArray(), 'tag');
 
-                    $formattedResults[] = [
+                    $memesAsArray = [
                         'id' => $meme->id,
                         'url' => $meme->getPublicUrl(),
                         'width' => $meme->width,
@@ -102,6 +105,12 @@ class ApiController extends BaseApiController
                             'secondary' => $secondaryTags
                         ]
                     ];
+
+                    if ($type == 'video') {
+                        $memesAsArray['thumbnail'] = $meme->getThumbnailUrl();
+                    }
+
+                    $formattedResults[] = $memesAsArray;
                 }
 
                 // Get total count of approved memes
@@ -152,6 +161,153 @@ class ApiController extends BaseApiController
                 'status' => 'error',
                 'message' => 'An error occurred while processing your search'
             ])->setStatusCode(500);
+        }
+    }
+
+    /**
+     * Track a view for a specific meme
+     * 
+     * @param int $id Meme ID
+     * @return ResponseInterface
+     */
+    public function trackViewAction(int $id)
+    {
+        try {
+            // Check if meme exists
+            $meme = Memes::findFirst($id);
+            if (!$meme) {
+                return $this->sendError('Meme not found', 404);
+            }
+
+            // Get client IP address
+            $ipAddress = $this->request->getClientAddress();
+
+            // Create new view record
+            $view = new MemeViews();
+            $view->meme_id = $id;
+            $view->ip_address = $ipAddress;
+
+            if (!$view->save()) {
+                $messages = [];
+                foreach ($view->getMessages() as $message) {
+                    $messages[] = $message->getMessage();
+                }
+
+                $this->response->setStatusCode(400, 'Bad Request');
+                return $this->response->setJsonContent([
+                    'status' => 'error',
+                    'message' => 'Failed to save view: ' . implode(', ', $messages)
+                ]);
+            }
+
+            return $this->response->setJsonContent([
+                'status' => 'success',
+                'message' => 'View recorded successfully'
+            ]);
+        } catch (\PDOException $exception) {
+            $this->response->setStatusCode(400, 'Bad Request');
+            return $this->response->setJsonContent([
+                'status' => 'error',
+                'message' => 'The view from this IP is already registered on this meme'
+            ]);
+        } catch (\Exception $e) {
+            // Log error details
+            $this->di->get('logger')->error(
+                sprintf(
+                    "[API Error] %s\nFile: %s\nLine: %d\nTrace:\n%s",
+                    $e->getMessage(),
+                    $e->getFile(),
+                    $e->getLine(),
+                    $e->getTraceAsString()
+                )
+            );
+            $this->response->setStatusCode(500, 'Internal server error');
+            return $this->response->setJsonContent([
+                'status' => 'error',
+                'message' => 'An error occurred while tracking the view: ' . $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Toggle laugh status for a meme
+     * 
+     * @param int $id Meme ID
+     * @return ResponseInterface
+     */
+    public function laughAction(int $id)
+    {
+        try {
+            // Get client IP address
+            $ipAddress = $this->request->getClientAddress();
+
+            // Like
+            $laugh = new MemeLaughs();
+            $laugh->meme_id = $id;
+            $laugh->ip_address = $ipAddress;
+            if (!$laugh->save()) {
+                throw new \Exception('Failed to save laugh');
+            }
+
+            return $this->response->setJsonContent([
+                'status' => 'success',
+                'message' => null,
+            ]);
+
+        } catch (\Exception $e) {
+            // Log error details
+            $this->di->get('logger')->error(
+                sprintf(
+                    "[API Error] %s\nFile: %s\nLine: %d\nTrace:\n%s",
+                    $e->getMessage(),
+                    $e->getFile(),
+                    $e->getLine(),
+                    $e->getTraceAsString()
+                )
+            );
+            $this->response->setStatusCode(500, 'Internal Server Error');
+            return $this->response->setJsonContent([
+                'status' => 'error',
+                'message' => 'An error occurred'
+            ]);
+        }
+    }
+
+    /**
+     * Get like status and count for a meme
+     * 
+     * @param int $id Meme ID
+     * @return ResponseInterface
+     */
+    public function getLikeStatusAction(int $id)
+    {
+        try {
+            // Check if meme exists
+            $meme = Memes::findFirst($id);
+            if (!$meme) {
+                $this->response->setStatusCode(404, 'Not Found');
+                return $this->response->setJsonContent([
+                    'status' => 'error',
+                    'message' => 'Meme not found'
+                ]);
+            }
+
+            $ipAddress = $this->request->getClientAddress();
+
+            return $this->response->setJsonContent([
+                'status' => 'success',
+                'data' => [
+                    'liked' => $meme->isLikedByIp($ipAddress),
+                    'like_count' => $meme->getLaughsCount()
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            $this->response->setStatusCode(500, 'Internal Server Error');
+            return $this->response->setJsonContent([
+                'status' => 'error',
+                'message' => 'An error occurred: ' . $e->getMessage()
+            ]);
         }
     }
 

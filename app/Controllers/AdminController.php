@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Models\Memes;
 use App\Models\MemeTags;
+use App\Models\MemeViews;
 use App\Models\QueuedUploads;
 use App\Services\TaggingServices\TaggingServiceFactory;
 use App\Services\TaggingServices\TaggingServiceInterface;
@@ -36,6 +37,10 @@ class AdminController extends ControllerBase
 
     public function indexAction()
     {
+        if (!$this->view->isLoggedIn) {
+            return $this->response->redirect('/admin/login');
+        }
+
         try {
             $currentPage = $this->request->getQuery('page', 'int', 1);
             $status = $this->request->getQuery('status', 'string', '');
@@ -68,22 +73,35 @@ class AdminController extends ControllerBase
                 $memeIds = array_values($searchService->search($searchQuery, [], null, 1000));
 
                 if (!empty($memeIds)) {
-                    $conditions[] = 'id IN ({meme_ids:array})';
+                    $conditions[] = 'Memes.id IN ({meme_ids:array})';
                     $binds['meme_ids'] = $memeIds;
                 } else {
                     // No results found
-                    $conditions[] = 'id = 0'; // Force no results
+                    $conditions[] = 'Memes.id = 0'; // Force no results
                 }
             }
 
-            $parameters['conditions'] = !empty($conditions) ? implode(' AND ', $conditions) : null;
-            $parameters['bind'] = $binds;
-            $parameters['order'] = 'created_at DESC';
+            // Create query builder
+            $builder = $this->modelsManager->createBuilder()
+                ->columns([
+                    'memes.*',
+                    'COUNT(meme_views.id) as view_count'
+                ])
+                ->from(['memes' => Memes::class])
+                ->leftJoin(MemeViews::class, 'memes.id = meme_views.meme_id', 'meme_views')
+                ->groupBy('memes.id')
+                ->orderBy('memes.created_at DESC');
 
-            // Now set up pagination
-            $paginator = new \Phalcon\Paginator\Adapter\Model([
-                'model' => Memes::class,
-                'parameters' => $parameters,
+            if (!empty($conditions)) {
+                $builder->where(implode(' AND ', $conditions));
+                foreach ($binds as $key => $value) {
+                    $builder->bindParam($key, $value);
+                }
+            }
+
+            // Set up pagination
+            $paginator = new \Phalcon\Paginator\Adapter\QueryBuilder([
+                'builder' => $builder,
                 'limit' => $limit,
                 'page' => $currentPage
             ]);
@@ -94,6 +112,7 @@ class AdminController extends ControllerBase
             $this->view->status = $status;
             $this->view->searchQuery = $searchQuery;
             $this->view->memeType = $memeType;
+
         } catch (\Exception $e) {
             // Log general error
             $this->di->get('logger')->error(
