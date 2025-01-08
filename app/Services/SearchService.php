@@ -57,6 +57,7 @@ class SearchService extends Injectable
                 ->addTextField('tag', 1.0, true)
                 ->addTextField('tag_normalized', 1.0, true)
                 ->addTagField('language', true)
+                ->addTagField('meme_type', true)
                 ->addNumericField('meme_id')
                 ->addNumericField('confidence')
                 ->addTextField('created_at')
@@ -129,7 +130,7 @@ class SearchService extends Injectable
     /**
      * Index a tag in RediSearch
      */
-    public function indexTag(int $memeId, string $tag, string $language, float $confidence, string $createdAt): bool
+    public function indexTag(int $memeId, string $tag, string $language, float $confidence, string $createdAt, string $type): bool
     {
         try {
             $this->ensureIndex();
@@ -143,7 +144,7 @@ class SearchService extends Injectable
 
             $documentId = sprintf("meme:$memeId:%s", uniqid('', true));
             $document = new DocumentMapper($documentId);
-            $document = $document->makeDocument($memeId, $tag, $normalizedTag, $language);
+            $document = $document->makeDocument($memeId, $tag, $normalizedTag, $language, $type);
 
             return $this->redisIndexing->add($document);
         } catch (\Exception $e) {
@@ -163,9 +164,10 @@ class SearchService extends Injectable
      * @param string|null $language
      * @param int $limit
      * @param int $offset
+     * @param string|null $type
      * @return array
      */
-    public function search(?string $query, ?array $tags = [], string $language = null, int $limit = 10, int $offset = 0): array
+    public function search(?string $query, ?array $tags = [], string $language = null, int $limit = 10, int $offset = 0, ?string $type = null): array
     {
         try {
             // Ensure index exists with stemming
@@ -214,13 +216,22 @@ class SearchService extends Injectable
                 return [];
             }
 
-            // Combine all search parts with AND operator
-            $searchQuery = implode(' & ', $searchParts);
+            // Add type filter if provided
+            if ($type) {
+                $searchParts[] = "@meme_type:{" . $type . "}";
+            }
 
+            // Build final query
+            $searchQuery = implode(' ', $searchParts);
+            if (empty($searchQuery)) {
+                return [];
+            }
+
+            // Execute search
             $results = $this->redisIndexing
                 ->limit($offset, $limit)
                 ->search($searchQuery, true);
-            
+
             // Extract meme IDs from results
             $memeIds = [];
             foreach ($results->getDocuments() as $document) {

@@ -73,10 +73,10 @@ class ApiController extends BaseApiController
 
             /** @var SearchService $searchService */
             $searchService = $this->di->get('searchService');
-            
+
             // Get meme IDs from search service
-            $memeIds = array_values($searchService->search($query, $tagArray, $responseLanguage, $limit, $offset));
-            $totalMemeIds = array_values($searchService->search($query, $tagArray, $responseLanguage, 1000));
+            $memeIds = array_values($searchService->search($query, $tagArray, $responseLanguage, $limit, $offset, $type));
+            $totalMemeIds = array_values($searchService->search($query, $tagArray, $responseLanguage, 1000, 0, $type));
 
             // Get meme details
             $formattedResults = [];

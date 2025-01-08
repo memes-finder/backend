@@ -11,6 +11,7 @@ class ReindexTagsTask extends Task
 {
     public function mainAction()
     {
+        /** @var SearchService $searchService */
         $searchService = $this->getDI()->get('searchService');
 
         // Drop existing index but keep documents
@@ -37,7 +38,8 @@ class ReindexTagsTask extends Task
                     $tag->tag,
                     $tag->language,
                     $tag->confidence ?? 1.0,
-                    $tag->created_at
+                    $tag->created_at,
+                    $tag->meme->meme_type
                 );
                 $indexed++;
 
