@@ -242,11 +242,75 @@ class ApiController extends BaseApiController
     public function laughAction(int $id)
     {
         try {
+            // Check if meme exists
+            $meme = Memes::findFirst($id);
+            if (!$meme) {
+                $this->response->setStatusCode(404, 'Not Found');
+                return $this->response->setJsonContent([
+                    'status' => 'error',
+                    'message' => 'Meme not found'
+                ]);
+            }
+
             // Get client IP address
             $ipAddress = $this->request->getClientAddress();
 
             // Like
             $laugh = new MemeLaughs();
+            $laugh->meme_id = $id;
+            $laugh->ip_address = $ipAddress;
+            if (!$laugh->save()) {
+                throw new \Exception('Failed to save laugh');
+            }
+
+            return $this->response->setJsonContent([
+                'status' => 'success',
+                'message' => null,
+            ]);
+
+        } catch (\Exception $e) {
+            // Log error details
+            $this->di->get('logger')->error(
+                sprintf(
+                    "[API Error] %s\nFile: %s\nLine: %d\nTrace:\n%s",
+                    $e->getMessage(),
+                    $e->getFile(),
+                    $e->getLine(),
+                    $e->getTraceAsString()
+                )
+            );
+            $this->response->setStatusCode(500, 'Internal Server Error');
+            return $this->response->setJsonContent([
+                'status' => 'error',
+                'message' => 'An error occurred'
+            ]);
+        }
+    }
+
+    /**
+     * Increase views count for a meme
+     *
+     * @param int $id Meme ID
+     * @return ResponseInterface
+     */
+    public function viewAction(int $id)
+    {
+        try {
+            // Check if meme exists
+            $meme = Memes::findFirst($id);
+            if (!$meme) {
+                $this->response->setStatusCode(404, 'Not Found');
+                return $this->response->setJsonContent([
+                    'status' => 'error',
+                    'message' => 'Meme not found'
+                ]);
+            }
+
+            // Get client IP address
+            $ipAddress = $this->request->getClientAddress();
+
+            // Like
+            $laugh = new MemeViews();
             $laugh->meme_id = $id;
             $laugh->ip_address = $ipAddress;
             if (!$laugh->save()) {

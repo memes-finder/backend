@@ -63,7 +63,7 @@ $router->addGet('/api/tags/trending', [
 // Meme view
 $router->addPost('/api/memes/view/{id:[0-9]+}', [
     'controller' => 'api',
-    'action' => 'trackView'
+    'action' => 'view'
 ]);
 
 // Meme laugh
@@ -108,5 +108,3 @@ $router->notFound([
 
 // Register the router in the DI container
 $di->set('router', $router);
-
-//$router->handle($_SERVER['REQUEST_URI']);
