@@ -41,7 +41,7 @@ class ApiController extends BaseApiController
         try {
             $query = $this->request->getQuery('q', 'string', '');
             $tags = $this->request->getQuery('tags', 'string', '');
-            $type = $this->request->getQuery('type', 'string', 'image');
+            $type = $this->request->getQuery('type', 'string', '');
             $page = $this->request->getQuery('page', 'int', 1);
             $limit = $this->request->getQuery('limit', 'int', 20);
             $offset = ($page - 1) * $limit;
@@ -81,15 +81,27 @@ class ApiController extends BaseApiController
             // Get meme details
             $formattedResults = [];
             if (!empty($memeIds)) {
+                if (empty($type)) {
+                    $queryParams = [
+                        'id IN ({ids:array})',
+                        'bind' => [
+                            'ids'   => $memeIds
+                        ]
+                    ];
+                } else {
+                    $queryParams = [
+                        'id IN ({ids:array}) AND meme_type = :type:',
+                        'bind' => [
+                            'ids'   => $memeIds,
+                            'type'  => $type
+                        ]
+                    ];
+                }
+
+                $queryParams['order'] = 'rand()';
+
                 /** @var Memes[] $memes */
-                $memes = Memes::find([
-                    'id IN ({ids:array}) AND meme_type = :type:',
-                    'bind' => [
-                        'ids'   => $memeIds,
-                        'type'  => $type
-                    ],
-                    'order' => 'rand()'
-                ]);
+                $memes = Memes::find($queryParams);
 
                 foreach ($memes as $meme) {
                     // Get tags in both languages but prioritize response language
