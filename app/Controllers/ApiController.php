@@ -87,7 +87,8 @@ class ApiController extends BaseApiController
                     'bind' => [
                         'ids'   => $memeIds,
                         'type'  => $type
-                    ]
+                    ],
+                    'order' => 'rand()'
                 ]);
 
                 foreach ($memes as $meme) {
