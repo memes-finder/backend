@@ -117,6 +117,7 @@ class ApiController extends BaseApiController
                         'type' => $meme->meme_type,
                         'laughs_count' => $meme->getLaughsCount(),
                         'views_count' => $meme->getViewCount(),
+                        'blur_hash' => $meme->blur_hash,
                         'tags' => [
                             'primary' => $primaryTags,
                             'secondary' => $secondaryTags

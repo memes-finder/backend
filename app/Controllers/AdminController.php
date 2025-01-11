@@ -95,7 +95,11 @@ class AdminController extends ControllerBase
             if (!empty($conditions)) {
                 $builder->where(implode(' AND ', $conditions));
                 foreach ($binds as $key => $value) {
-                    $builder->bindParam($key, $value);
+                    if (is_array($value)) {
+                        $builder->inWhere('Memes.id', $value);
+                    } else {
+                        $builder->andWhere('status = :' . $key . ':', [$key => $value]);
+                    }
                 }
             }
 
@@ -644,5 +648,107 @@ class AdminController extends ControllerBase
     {
         $this->session->remove('admin_token');
         return $this->response->redirect('/admin/login');
+    }
+
+    /**
+     * Show pending tags for review
+     */
+    public function pendingTagsAction()
+    {
+        if (!$this->view->isLoggedIn) {
+            return $this->response->redirect('/admin/login');
+        }
+
+        $currentPage = $this->request->getQuery('page', 'int', 1);
+        $limit = 20;
+
+        // Get pending tags with their memes
+        $pendingTags = MemeTags::find([
+            'conditions' => 'status = :status:',
+            'bind' => ['status' => MemeTags::STATUS_PENDING],
+            'order' => 'created_at DESC',
+            'limit' => $limit,
+            'offset' => ($currentPage - 1) * $limit
+        ]);
+
+        // Get total count for pagination
+        $totalTags = MemeTags::count([
+            'conditions' => 'status = :status:',
+            'bind' => ['status' => MemeTags::STATUS_PENDING]
+        ]);
+
+        $this->view->setVars([
+            'pendingTags' => $pendingTags,
+            'currentPage' => $currentPage,
+            'totalPages' => ceil($totalTags / $limit),
+            'totalTags' => $totalTags,
+            'title' => 'Pending Tags Review',
+            'status' => ''
+        ]);
+    }
+
+    /**
+     * Approve or reject a pending tag
+     */
+    public function reviewTagAction(int $tagId)
+    {
+        if (!$this->view->isLoggedIn) {
+            return $this->response->redirect('/admin/login');
+        }
+
+        try {
+            $action = $this->request->getPost('action');
+            if (!in_array($action, ['approved', 'rejected'])) {
+                throw new \Exception('Invalid action');
+            }
+
+            /** @var MemeTags $tag */
+            $tag = MemeTags::findFirst($tagId);
+            if (!$tag) {
+                throw new \Exception('Tag not found');
+            }
+
+            $tag->status = $action === 'approve' ? 
+                MemeTags::STATUS_APPROVED : 
+                MemeTags::STATUS_REJECTED;
+
+            if ($tag->save()) {
+                // If approved, index the tag in search
+                if ($action === 'approve') {
+                    /** @var SearchService $searchService */
+                    $searchService = $this->di->get('searchService');
+                    try {
+                        $searchService->indexTag(
+                            $tag->meme_id,
+                            $tag->tag,
+                            $tag->language,
+                            $tag->confidence,
+                            $tag->getMeme()->meme_type
+                        );
+                    } catch (\Exception $e) {
+                        $this->logger->error(
+                            "Failed to index approved tag: " . $e->getMessage(),
+                            ['tag' => $tag->toArray()]
+                        );
+                    }
+                } else {
+                    $tag->delete();
+                }
+
+                $this->flash->success(
+                    $action === 'approved' ?
+                    'Tag approved and indexed successfully' : 
+                    'Tag rejected & deleted successfully'
+                );
+            } else {
+                throw new \Exception('Failed to save tag status');
+            }
+
+        } catch (\Exception $e) {
+            $this->flash->error($e->getMessage());
+        }
+
+        // Redirect back to pending tags
+        return $this->response->redirect('/admin/tags/pending');
     }
 }

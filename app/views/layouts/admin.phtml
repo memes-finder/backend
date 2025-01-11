@@ -115,7 +115,7 @@
             <div class="col-md-2 sidebar">
                 <h3 class="mb-4">Admin Panel</h3>
                 <div class="list-group">
-                    <a href="/admin" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center <?= empty($status) ? 'active' : '' ?>">
+                    <a href="/admin" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center <?= $this->router->getActionName() === 'index' && empty($status) ? 'active' : '' ?>">
                         <span><i class="fas fa-image me-2"></i> All Memes</span>
                         <span class="badge <?= empty($status) ? 'bg-light text-dark' : 'bg-secondary' ?> rounded-pill"><?= $memeCounts['total'] ?? 0 ?></span>
                     </a>
@@ -126,6 +126,9 @@
                     <a href="/admin?status=approved" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center <?= $status === 'approved' ? 'active' : '' ?>">
                         <span><i class="fas fa-check me-2"></i> Approved</span>
                         <span class="badge <?= $status === 'approved' ? 'bg-light text-dark' : 'bg-success' ?> rounded-pill"><?= $memeCounts['approved'] ?? 0 ?></span>
+                    </a>
+                    <a href="/admin/tags/pending" class="list-group-item list-group-item-action <?= $this->router->getControllerName() === 'admin' && $this->router->getActionName() === 'pendingTags' ? 'active' : '' ?>">
+                        <i class="fas fa-tags me-2"></i> Pending Tags
                     </a>
                     <a href="/admin/upload" class="list-group-item list-group-item-action">
                         <i class="fas fa-upload me-2"></i> Bulk Upload

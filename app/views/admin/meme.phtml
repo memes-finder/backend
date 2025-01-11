@@ -8,7 +8,7 @@
     <div class="card-body">
         <div class="row">
             <div class="col-md-6">
-                <img src="<?= $meme->getPublicUrl() ?>" class="img-fluid rounded" alt="Meme">
+                <img src="<?= $meme->meme_type === 'video' ? $meme->getThumbnailUrl() : $meme->getPublicUrl() ?>" class="img-fluid rounded" alt="Meme">
                 <div class="mt-3">
                     <h5>Details:</h5>
                     <ul class="list-group">

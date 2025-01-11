@@ -1,0 +1,95 @@
+<div class="container mt-4">
+    <h2>Pending Tags Review</h2>
+
+    <?php if (count($pendingTags) > 0): ?>
+    <div class="row mb-4">
+        <div class="col">
+            <div class="alert alert-info">
+                Total pending tags: <?= $totalTags ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <?php if (count($pendingTags) === 0): ?>
+        <div class="alert alert-info">
+            No pending tags to review. 
+        </div>
+    <?php else: ?>
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Meme</th>
+                        <th>Tag</th>
+                        <th>Language</th>
+                        <th>Added</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($pendingTags as $tag): ?>
+                        <?php 
+                        try {
+                            $meme = $tag->getMeme();
+                        } catch (\Exception $e) {
+                            continue;
+                        }
+                        ?>
+                        <tr>
+                            <td>
+                                <?php if ($meme->meme_type === 'video'): ?>
+                                    <img src="<?= $meme->getThumbnailUrl() ?>" class="img-thumbnail" style="max-height: 100px;" alt="Video thumbnail">
+                                <?php else: ?>
+                                    <img src="<?= $meme->getPublicUrl() ?>" class="img-thumbnail" style="max-height: 100px;" alt="Meme image">
+                                <?php endif; ?>
+                                <a href="/admin/meme/<?= $meme->id ?>" target="_blank">View</a>
+                            </td>
+                            <td><?= $this->escaper->escapeHtml($tag->tag) ?></td>
+                            <td><?= $tag->language === 'arabic' ? 'عربي' : 'English' ?></td>
+                            <td><?= (new \DateTime($tag->created_at))->format('Y-m-d H:i:s') ?></td>
+                            <td>
+                                <form method="post" action="/admin/tags/review/<?= $tag->id ?>" class="d-inline">
+                                    <input type="hidden" name="action" value="approved">
+                                    <button type="submit" class="btn btn-success btn-sm">
+                                        <i class="fas fa-check"></i> Approve
+                                    </button>
+                                </form>
+                                <form method="post" action="/admin/tags/review/<?= $tag->id ?>" class="d-inline">
+                                    <input type="hidden" name="action" value="rejected">
+                                    <button type="submit" class="btn btn-danger btn-sm ms-2">
+                                        <i class="fas fa-times"></i> Reject
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <?php if ($totalPages > 1): ?>
+            <nav class="mt-4">
+                <ul class="pagination justify-content-center">
+                    <?php if ($currentPage > 1): ?>
+                        <li class="page-item">
+                            <a class="page-link" href="/admin/tags/pending?page=<?= $currentPage - 1 ?>">Previous</a>
+                        </li>
+                    <?php endif; ?>
+                    
+                    <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                        <li class="page-item <?= $i === $currentPage ? 'active' : '' ?>">
+                            <a class="page-link" href="/admin/tags/pending?page=<?= $i ?>"><?= $i ?></a>
+                        </li>
+                    <?php endfor; ?>
+                    
+                    <?php if ($currentPage < $totalPages): ?>
+                        <li class="page-item">
+                            <a class="page-link" href="/admin/tags/pending?page=<?= $currentPage + 1 ?>">Next</a>
+                        </li>
+                    <?php endif; ?>
+                </ul>
+            </nav>
+        <?php endif; ?>
+    <?php endif; ?>
+</div>

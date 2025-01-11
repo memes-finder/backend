@@ -138,35 +138,33 @@ class TagsController extends ControllerBase
     }
 
     /**
-     * Add tags to a meme
-     *
-     * @param int $id Meme ID
-     * @return ResponseInterface
+     * Add tags to a meme (will be pending until approved)
+     * @route /api/tags/add/{id}
+     * @method POST
      */
-    public function addTagsAction(int $id)
+    public function addAction(int $id): ResponseInterface
     {
         try {
-            /**
-             * Check if meme exists
-             * @var Memes $meme
-             */
+            // Check if meme exists
             $meme = Memes::findFirst($id);
             if (!$meme) {
-                $this->response->setStatusCode(404, 'Not Found');
-                return $this->response->setJsonContent([
-                    'status' => 'error',
-                    'message' => 'Meme not found'
-                ]);
+                return $this->response
+                    ->setStatusCode(404)
+                    ->setJsonContent([
+                        'status' => 'error',
+                        'message' => 'Meme not found'
+                    ]);
             }
 
             // Get tags from request
             $tags = $this->request->getJsonRawBody(true);
             if (empty($tags) || !isset($tags['tags']) || !is_array($tags['tags'])) {
-                $this->response->setStatusCode(400, 'Bad Request');
-                return $this->response->setJsonContent([
-                    'status' => 'error',
-                    'message' => 'Tags array is required in request body'
-                ]);
+                return $this->response
+                    ->setStatusCode(400)
+                    ->setJsonContent([
+                        'status' => 'error',
+                        'message' => 'Tags array is required in request body'
+                    ]);
             }
 
             // Process each tag
@@ -186,34 +184,16 @@ class TagsController extends ControllerBase
                     $languageCode = 'english';
                 }
 
-                // Create new tag
+                // Create new tag (will be set as pending by model)
                 $memeTag = new MemeTags();
                 $memeTag->meme_id = $id;
                 $memeTag->tag = $tagText;
                 $memeTag->language = $languageCode;
-                $memeTag->confidence = 1.0; // User-added tags have full confidence
+                $memeTag->confidence = 1.0;
                 $memeTag->origin = MemeTags::ORIGIN_MANUAL;
 
                 if ($memeTag->save()) {
                     $addedTags[] = $tagText;
-
-                    // Index the new tag in search
-                    /** @var SearchService $searchService */
-                    $searchService = $this->di->get('searchService');
-                    try {
-                        $searchService->indexTag(
-                            $id,
-                            $tagText,
-                            $languageCode,
-                            1.0,
-                            $meme->meme_type
-                        );
-                    } catch (\Exception $e) {
-                        $this->di->get('logger')->error(
-                            "Failed to index tag: " . $e->getMessage(),
-                            ['tag' => $tagText, 'meme_id' => $id]
-                        );
-                    }
                 } else {
                     $messages = [];
                     foreach ($memeTag->getMessages() as $message) {
@@ -228,7 +208,8 @@ class TagsController extends ControllerBase
                 'status' => 'success',
                 'data' => [
                     'added_tags' => $addedTags,
-                    'errors' => $errors
+                    'errors' => $errors,
+                    'message' => 'Tags added successfully and will be reviewed by moderators'
                 ]
             ];
 
@@ -249,14 +230,20 @@ class TagsController extends ControllerBase
                     $e->getFile(),
                     $e->getLine(),
                     $e->getTraceAsString()
-                )
+                ),
+                [
+                    'meme_id' => $id,
+                    'tags' => $tags['tags'] ?? null,
+                    'language' => $language ?? null
+                ]
             );
 
-            $this->response->setStatusCode(500, 'Internal Server Error');
-            return $this->response->setJsonContent([
-                'status' => 'error',
-                'message' => 'An error occurred while adding tags'
-            ]);
+            return $this->response
+                ->setStatusCode(500)
+                ->setJsonContent([
+                    'status' => 'error',
+                    'message' => 'An error occurred while adding tags'
+                ]);
         }
     }
 }

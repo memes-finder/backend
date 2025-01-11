@@ -33,6 +33,16 @@ $router->add('/admin/tags/{id:[0-9]+}', [
     'action' => 'tags'
 ]);
 
+$router->add('/admin/tags/pending', [
+    'controller' => 'admin',
+    'action' => 'pendingTags'
+]);
+
+$router->add('/admin/tags/review/{id:[0-9]+}', [
+    'controller' => 'admin',
+    'action' => 'reviewTag'
+]);
+
 $router->add('/admin/tags/generate/{id:[0-9]+}', [
     'controller' => 'admin',
     'action' => 'generateTags'
@@ -62,7 +72,7 @@ $router->addGet('/api/tags/trending', [
 
 $router->addPost('/api/tags/{id:[0-9]+}', [
     'controller' => 'tags',
-    'action' => 'addTags'
+    'action' => 'add'
 ]);
 
 // Meme view
