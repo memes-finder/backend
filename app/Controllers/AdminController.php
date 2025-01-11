@@ -241,6 +241,7 @@ class AdminController extends ControllerBase
             return $this->response->redirect('/admin');
         }
 
+        /** @var Memes $meme */
         $meme = Memes::findFirst($memeId);
         if (!$meme) {
             $this->flash->error("Meme not found");
@@ -289,7 +290,7 @@ class AdminController extends ControllerBase
                             $tag->tag,
                             $tag->language,
                             $tag->confidence,
-                            $tag->created_at
+                            $meme->meme_type
                         );
                         $this->flash->success("Tag added successfully");
                     } catch (\Exception $e) {
@@ -378,7 +379,7 @@ class AdminController extends ControllerBase
                                 $memeTag->tag,
                                 $memeTag->language,
                                 $memeTag->confidence,
-                                $memeTag->created_at
+                                $meme->meme_type
                             );
                         } catch (\Exception $e) {
                             error_log("Error indexing AI tag: " . $e->getMessage());

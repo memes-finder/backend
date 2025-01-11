@@ -3,6 +3,7 @@
 namespace App\Tasks;
 
 use App\Models\Memes;
+use App\Models\MemeTags;
 use App\Models\MemeTags as Tags;
 use App\Services\SearchService;
 use Phalcon\Cli\Task;
@@ -23,6 +24,7 @@ class ReindexTagsTask extends Task
         }
 
         // Get all tags
+        /** @var MemeTags[] $tags */
         $tags = Tags::find();
 
         $total = count($tags);

@@ -19,6 +19,7 @@ class IndexTask extends Task
         $processed = 0;
         $total = MemeTags::count();
 
+        /** @var MemeTags[] $memeTags */
         $memeTags = MemeTags::find([
             'order' => 'meme_id ASC'
         ]);
@@ -30,7 +31,7 @@ class IndexTask extends Task
                     $memeTag->tag,
                     $memeTag->language,
                     $memeTag->confidence,
-                    $memeTag->created_at
+                    $memeTag->meme->meme_type
                 );
                 
                 $processed++;

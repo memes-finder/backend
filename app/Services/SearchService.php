@@ -130,7 +130,7 @@ class SearchService extends Injectable
     /**
      * Index a tag in RediSearch
      */
-    public function indexTag(int $memeId, string $tag, string $language, float $confidence, string $createdAt, string $type): bool
+    public function indexTag(int $memeId, string $tag, string $language, float $confidence, string $type): bool
     {
         try {
             $this->ensureIndex();

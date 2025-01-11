@@ -61,6 +61,11 @@ class Memes extends Model
     public $thumbnail;
 
     /**
+     * @var string|null
+     */
+    public $blur_hash;
+
+    /**
      * @var float|null
      */
     public $duration;

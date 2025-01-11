@@ -75,7 +75,7 @@ class RegenerateTagsTask extends Task
                                     $memeTag->tag,
                                     $memeTag->language,
                                     $memeTag->confidence,
-                                    $memeTag->created_at
+                                    $meme->meme_type
                                 );
                             } catch (\Exception $e) {
                                 $this->println("Warning: Error indexing tag for meme {$meme->id}: " . $e->getMessage());

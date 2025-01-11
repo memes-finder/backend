@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Phalcon\Mvc\Model;
 
+/**
+ * @property Memes $meme
+ */
 class MemeTags extends Model
 {
     public const ORIGIN_MANUAL = 'manual';

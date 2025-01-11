@@ -7,6 +7,7 @@ use App\Models\Memes;
 use App\Models\SearchLogs;
 use App\Models\MemeViews;
 use App\Models\MemeLaughs;
+use App\Models\MemeTags;
 use Phalcon\Http\ResponseInterface;
 
 class ApiController extends BaseApiController

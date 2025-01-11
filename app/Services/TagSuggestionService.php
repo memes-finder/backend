@@ -71,14 +71,14 @@ class TagSuggestionService
             ])
             ->innerJoin(Memes::class, 'Memes.id = \App\Models\MemeTags.meme_id', 'Memes')
             ->where('\App\Models\MemeTags.language = :language:')
-            ->andWhere('\App\Models\MemeTags.created_at >= :last_week:')
+//            ->andWhere('\App\Models\MemeTags.created_at >= :last_week:')
             ->andWhere('Memes.status = :status:')
             ->groupBy('tag')
             ->orderBy('rand()')
             ->limit($limit)
             ->bind([
                 'language' => $languageName,
-                'last_week' => $lastWeek,
+//                'last_week' => $lastWeek,
                 'status' => Memes::STATUS_APPROVED
             ])
             ->execute()
