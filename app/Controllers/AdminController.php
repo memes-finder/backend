@@ -6,6 +6,7 @@ use App\Models\Memes;
 use App\Models\MemeTags;
 use App\Models\MemeViews;
 use App\Models\QueuedUploads;
+use App\Services\SearchService;
 use App\Services\TaggingServices\TaggingServiceFactory;
 use App\Services\TaggingServices\TaggingServiceInterface;
 
@@ -157,7 +158,7 @@ class AdminController extends ControllerBase
             $action = $this->request->getPost('action');
             
             switch ($action) {
-                case 'approve':
+                case 'approved':
                     $meme->status = Memes::STATUS_APPROVED;
                     break;
                 case 'pending':
@@ -708,13 +709,13 @@ class AdminController extends ControllerBase
                 throw new \Exception('Tag not found');
             }
 
-            $tag->status = $action === 'approve' ? 
+            $tag->status = $action === 'approved' ?
                 MemeTags::STATUS_APPROVED : 
                 MemeTags::STATUS_REJECTED;
 
             if ($tag->save()) {
                 // If approved, index the tag in search
-                if ($action === 'approve') {
+                if ($action === 'approved') {
                     /** @var SearchService $searchService */
                     $searchService = $this->di->get('searchService');
                     try {
