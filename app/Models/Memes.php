@@ -232,7 +232,7 @@ class Memes extends Model
     public function getTagsByLanguage(string $language)
     {
         return $this->getTags([
-            'conditions' => 'language = :language:',
+            'conditions' => 'language = :language: AND status = \'approved\'',
             'bind' => ['language' => $language]
         ]);
     }
