@@ -4,18 +4,15 @@ namespace App\Controllers;
 
 use App\Models\Memes;
 use App\Models\MemeTags;
-use App\Services\SearchService;
 use App\Services\TagSuggestionService;
 use Phalcon\Http\ResponseInterface;
 
-class TagsController extends ControllerBase
+class TagsController extends BaseApiController
 {
     private TagSuggestionService $tagSuggestionService;
 
     public function initialize()
     {
-        parent::initialize();
-
         $this->tagSuggestionService = new TagSuggestionService();
     }
 

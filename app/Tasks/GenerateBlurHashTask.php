@@ -79,10 +79,10 @@ class GenerateBlurHashTask extends Task
                     }
 
                     // For videos, generate blur hash for the thumbnail
-                    if ($meme->meme_type === 'video' && empty($meme->thumbnail_blur_hash)) {
+                    if ($meme->meme_type === 'video' && empty($meme->blur_hash)) {
                         try {
                             $thumbnailPath = $meme->getThumbnailUrl();
-                            $meme->thumbnail_blur_hash = $this->generateBlurHash($thumbnailPath);
+                            $meme->blur_hash = $this->generateBlurHash($thumbnailPath);
                             echo "Generated blur hash for thumbnail.\n";
                         } catch (\Exception $e) {
                             echo "Error generating thumbnail blur hash: {$e->getMessage()}\n";
