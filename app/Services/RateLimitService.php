@@ -7,7 +7,7 @@ use Redis;
 
 class RateLimitService extends Injectable
 {
-    private const RATE_LIMIT = 1; // requests per second
+    private const RATE_LIMIT = 10; // requests per second
     private const WINDOW_SIZE = 1; // window size in seconds
     private Redis $redis;
 
