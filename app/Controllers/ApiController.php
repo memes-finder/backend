@@ -87,7 +87,7 @@ class ApiController extends BaseApiController
                 $memes = Memes::find([
                     'conditions' => implode(' AND ', $conditions),
                     'bind' => $params,
-                    'order' => 'id DESC',
+                    'order' => 'rand()',
                     'limit' => $limit,
                     'offset' => $offset
                 ]);
@@ -111,7 +111,7 @@ class ApiController extends BaseApiController
                         )
                     ];
 
-                    $queryParams['order'] = 'id DESC';
+                    $queryParams['order'] = 'rand()';
 
                     /** @var Memes[] $memes */
                     $memes = Memes::find($queryParams);
