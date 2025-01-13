@@ -45,7 +45,7 @@ class ApiController extends BaseApiController
             $type = $this->request->getQuery('type', 'string', '');
             $page = $this->request->getQuery('page', 'int', 1);
             $limit = $this->request->getQuery('limit', 'int', 20);
-            $offset = ($page - 1) * $limit;
+            $offset = (($page + 1) - 1) * $limit;
 
             // Parse tags if provided
             $tagArray = [];
