@@ -66,6 +66,8 @@ class ApiController extends BaseApiController
                 $searchLog->save();
             }
 
+            $totalApprovedCount = 0;
+
             // If no query and no tags, get directly from database
             if (empty($query) && empty($tagArray)) {
                 // Build conditions
@@ -115,6 +117,14 @@ class ApiController extends BaseApiController
 
                     /** @var Memes[] $memes */
                     $memes = Memes::find($queryParams);
+
+                    // Get total count of approved memes
+                    $totalApprovedCount = Memes::count([
+                        'conditions' => 'id IN ({ids:array})',
+                        'bind' => [
+                            'ids' => $totalMemeIds
+                        ]
+                    ]);
                 }
             }
 
@@ -147,14 +157,6 @@ class ApiController extends BaseApiController
 
                 $formattedResults[] = $memesAsArray;
             }
-
-            // Get total count of approved memes
-            $totalApprovedCount = Memes::count([
-                'conditions' => 'id IN ({ids:array})',
-                'bind' => [
-                    'ids' => $totalMemeIds
-                ]
-            ]);
 
             // Update search log with results count
             if (!empty($query) || !empty($tagArray)) {

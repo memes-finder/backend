@@ -74,11 +74,11 @@ class AdminController extends ControllerBase
                 $memeIds = array_values($searchService->search($searchQuery, [], null, 1000));
 
                 if (!empty($memeIds)) {
-                    $conditions[] = 'Memes.id IN ({meme_ids:array})';
+                    $conditions[] = 'memes.id IN ({meme_ids:array})';
                     $binds['meme_ids'] = $memeIds;
                 } else {
                     // No results found
-                    $conditions[] = 'Memes.id = 0'; // Force no results
+                    $conditions[] = 'memes.id = 0'; // Force no results
                 }
             }
 
@@ -95,13 +95,7 @@ class AdminController extends ControllerBase
 
             if (!empty($conditions)) {
                 $builder->where(implode(' AND ', $conditions));
-                foreach ($binds as $key => $value) {
-                    if (is_array($value)) {
-                        $builder->inWhere('Memes.id', $value);
-                    } else {
-                        $builder->andWhere('status = :' . $key . ':', [$key => $value]);
-                    }
-                }
+                $builder->setBindParams($binds);
             }
 
             // Set up pagination
