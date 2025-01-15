@@ -64,6 +64,7 @@ class CompressImagesTask extends Task
             foreach ($memes as $meme) {
                 try {
                     $processed++;
+                    $lastProcessedId = $meme->id;
                     echo "Processing meme {$meme->id} ({$processed}/{$total})... ";
 
                     // Get the appropriate URL based on meme type
@@ -108,7 +109,6 @@ class CompressImagesTask extends Task
                     }
 
                     $compressed++;
-                    $lastProcessedId = $meme->id;
 
                     // Cleanup
                     unlink($tempPath);
