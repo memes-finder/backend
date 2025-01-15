@@ -230,6 +230,7 @@ class SearchService extends Injectable
             // Execute search
             $results = $this->redisIndexing
                 ->limit($offset, $limit)
+                ->sortBy('confidence', false)  // Sort by confidence in descending order
                 ->search($searchQuery, true);
 
             // Extract meme IDs from results

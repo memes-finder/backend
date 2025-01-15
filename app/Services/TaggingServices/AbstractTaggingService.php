@@ -2,7 +2,9 @@
 
 namespace App\Services\TaggingServices;
 
-abstract class AbstractTaggingService implements TaggingServiceInterface
+use Phalcon\Di\Injectable;
+
+abstract class AbstractTaggingService extends Injectable implements TaggingServiceInterface
 {
 
     /**

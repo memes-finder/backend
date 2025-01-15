@@ -56,9 +56,12 @@ class RegenerateTagsTask extends Task
 
                 $now = date('Y-m-d H:i:s');
 
+                $tagsCount = 0;
+
                 // Save generated tags
                 foreach ($tags as $language => $langTags) {
                     foreach ($langTags as $tag) {
+                        $tagsCount++;
                         $memeTag = new MemeTags();
                         $memeTag->meme_id = $meme->id;
                         $memeTag->tag = $tag;
@@ -84,7 +87,12 @@ class RegenerateTagsTask extends Task
                     }
                 }
 
-                $this->println("Successfully processed meme {$meme->id}");
+                if ($tagsCount) {
+                    $this->println("Successfully processed meme {$meme->id}");
+                } else {
+                    $errors++;
+                    $this->println("Failed to processed meme {$meme->id}");
+                }
 
                 // Add a small delay to avoid rate limiting
                 usleep(500000); // 0.5 second delay
