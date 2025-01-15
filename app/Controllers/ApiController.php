@@ -46,6 +46,8 @@ class ApiController extends BaseApiController
             $page = $this->request->getQuery('page', 'int', 1);
             $limit = $this->request->getQuery('limit', 'int', 20);
             $offset = (($page + 1) - 1) * $limit;
+            $isAll = $this->request->getQuery('all', 'int', 0);
+            $order = $isAll ? 'id DESC' : 'rand()';
 
             // Parse tags if provided
             $tagArray = [];
@@ -89,7 +91,7 @@ class ApiController extends BaseApiController
                 $memes = Memes::find([
                     'conditions' => implode(' AND ', $conditions),
                     'bind' => $params,
-                    'order' => 'rand()',
+                    'order' => $order,
                     'limit' => $limit,
                     'offset' => $offset
                 ]);
@@ -113,7 +115,7 @@ class ApiController extends BaseApiController
                         )
                     ];
 
-                    $queryParams['order'] = 'rand()';
+                    $queryParams['order'] = $order;
 
                     /** @var Memes[] $memes */
                     $memes = Memes::find($queryParams);
