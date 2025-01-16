@@ -71,17 +71,24 @@ class RegenerateTagsTask extends Task
                         $memeTag->created_at = $now;
 
                         if ($memeTag->save()) {
-                            // Index the new tag
-                            try {
-                                $this->getDI()->get('searchService')->indexTag(
-                                    $memeTag->meme_id,
-                                    $memeTag->tag,
-                                    $memeTag->language,
-                                    $memeTag->confidence,
-                                    $meme->meme_type
+                            // Group tags by language
+                            $tagsByLang = [];
+                            foreach ($tags as $lang => $langTags) {
+                                $dbLang = $lang === 'ar' ? 'arabic' : 'english';
+                                foreach ($langTags as $t) {
+                                    $tagsByLang[$dbLang][] = $t;
+                                }
+                            }
+
+                            // Index each language group
+                            foreach ($tagsByLang as $lang => $langTags) {
+                                $this->getDI()->get('searchService')->indexTags(
+                                    $meme->id,
+                                    $langTags,
+                                    $lang,
+                                    $meme->meme_type,
+                                    true // Replace existing documents
                                 );
-                            } catch (\Exception $e) {
-                                $this->println("Warning: Error indexing tag for meme {$meme->id}: " . $e->getMessage());
                             }
                         }
                     }

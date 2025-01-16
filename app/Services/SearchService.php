@@ -54,18 +54,16 @@ class SearchService extends Injectable
 
             // Create new index with stemming
             $this->redisIndexing
-                ->addTextField('tag', 1.0, true)
-                ->addTextField('tag_normalized', 1.0, true)
+                ->addTextField('tag', 1.0, true)  // Combined tags field
+                ->addTextField('tag_normalized', 1.0, true)  // Combined normalized tags
                 ->addTagField('language', true)
                 ->addTagField('meme_type', true)
                 ->addNumericField('meme_id')
-                ->addNumericField('confidence')
-                ->addTextField('created_at')
                 ->create();
 
             return true;
         } catch (\Exception $e) {
-            error_log("Error creating index: " . $e->getMessage());
+            $this->logger->error("Error creating index: " . $e->getMessage());
             throw $e;
         }
     }
@@ -81,7 +79,7 @@ class SearchService extends Injectable
             }
             return true;
         } catch (\Exception $e) {
-            error_log("Error ensuring index: " . $e->getMessage());
+            $this->logger->error("Error ensuring index: " . $e->getMessage());
             return false;
         }
     }
@@ -128,29 +126,63 @@ class SearchService extends Injectable
     }
 
     /**
-     * Index a tag in RediSearch
+     * Normalize language code to database format (english, arabic)
      */
-    public function indexTag(int $memeId, string $tag, string $language, float $confidence, string $type): bool
+    private function normalizeLanguage(string $language): string
+    {
+        // Convert from API format
+        if ($language === 'ar') {
+            return 'arabic';
+        }
+        if ($language === 'en') {
+            return 'english';
+        }
+
+        // Convert from database format
+        if (in_array($language, ['arabic', 'english'])) {
+            return $language;
+        }
+
+        // Default to English for unsupported languages
+        $this->logger->warning("Unsupported language code: {$language}, defaulting to 'english'");
+        return 'english';
+    }
+
+    /**
+     * Index a meme's tags in RediSearch
+     * 
+     * @param bool $replace If true, replace existing document instead of adding new one
+     */
+    public function indexTags(int $memeId, array $tags, string $language, string $type, bool $replace = false): bool
     {
         try {
             $this->ensureIndex();
 
-            // For Arabic tags, store both original and normalized versions
-            if (preg_match('/\p{Arabic}/u', $tag)) {
-                $normalizedTag = $this->normalizeArabicText($tag);
-            } else {
-                $normalizedTag = $this->normalizeTag($tag);
+            // Normalize language
+            $language = $this->normalizeLanguage($language);
+
+            $normalizedTags = [];
+            $originalTags = [];
+
+            foreach ($tags as $tag) {
+                // For Arabic tags, store both original and normalized versions
+                if (preg_match('/\p{Arabic}/u', $tag)) {
+                    $normalizedTags[] = $this->normalizeArabicText($tag);
+                } else {
+                    $normalizedTags[] = $this->normalizeTag($tag);
+                }
+                $originalTags[] = $tag;
             }
 
-            $documentId = sprintf("meme:$memeId:%s", uniqid('', true));
+            $documentId = sprintf("meme:%d", $memeId);
             $document = new DocumentMapper($documentId);
-            $document = $document->makeDocument($memeId, $tag, $normalizedTag, $language, $type);
+            $document = $document->makeDocument($memeId, $originalTags, $normalizedTags, $language, $type);
 
-            return $this->redisIndexing->add($document);
+            return $replace ? $this->redisIndexing->replace($document) : $this->redisIndexing->add($document);
         } catch (\Exception $e) {
             $this->logger->error(
                 'Indexing failed: ' . $e->getMessage(),
-                ['exception' => $e, 'args' => func_get_args()]
+                ['exception' => $e, 'memeId' => $memeId, 'tags' => $tags]
             );
             throw $e;
         }
@@ -158,25 +190,16 @@ class SearchService extends Injectable
 
     /**
      * Search memes by query text and tags
-     *
-     * @param string|null $query Text query
-     * @param array|null $tags Array of tags to search for
-     * @param string|null $language
-     * @param int $limit
-     * @param int $offset
-     * @param string|null $type
-     * @return array
      */
     public function search(?string $query, ?array $tags = [], string $language = null, int $limit = 10, int $offset = 0, ?string $type = null): array
     {
         try {
-            // Ensure index exists with stemming
             $this->ensureIndex();
 
             $searchParts = [];
 
             // Add text query if provided
-            if (!empty($query)) {
+            if (0 && !empty($query)) {
                 // For Arabic text, apply normalization
                 if (preg_match('/\p{Arabic}/u', $query)) {
                     $normalizedQuery = $this->normalizeArabicText($query);
@@ -184,36 +207,36 @@ class SearchService extends Injectable
                     $normalizedQuery = $this->normalizeTag($query);
                 }
 
-                // Build text search query with multiple variations and stemming
-                $searchTerms = [
-                    $query,              // Exact match
-                    $normalizedQuery . '*' // Normalized prefix match
-                ];
-
-                $searchParts[] = '@tag:(' . implode('|', array_map(function($term) {
-                    return '~' . addslashes($term);
-                }, $searchTerms)) . ') @tag_normalized:(' . $normalizedQuery . ')';
+                // Search in both original and normalized tags
+                $searchParts[] = sprintf(
+                    '(@tag:(%s) | @tag_normalized:(%s))',
+                    $this->escapeQuery($query),
+                    $this->escapeQuery($normalizedQuery)
+                );
             }
 
             // Add tag search if provided
             if (!empty($tags)) {
                 $tagQueries = [];
                 foreach ($tags as $tag) {
-                    // Normalize tag based on language
                     if (preg_match('/\p{Arabic}/u', $tag)) {
                         $normalizedTag = $this->normalizeArabicText($tag);
                     } else {
                         $normalizedTag = $this->normalizeTag($tag);
                     }
 
-                    $tagQueries[] = '@tag:(~' . addslashes($tag) . ') | @tag_normalized:(~' . $normalizedTag . ')';
+                    $tagQueries[] = sprintf(
+                        '(@tag:(%s) | @tag_normalized:(%s))',
+                        $this->escapeQuery($tag),
+                        $this->escapeQuery($normalizedTag)
+                    );
                 }
                 $searchParts[] = '(' . implode(' | ', $tagQueries) . ')';
             }
 
-            // If no search criteria provided, return empty result
-            if (empty($searchParts)) {
-                return [];
+            // Add language filter if provided
+            if (0 && $language) {
+                $searchParts[] = "@language:{" . $language . "}";
             }
 
             // Add type filter if provided
@@ -230,7 +253,6 @@ class SearchService extends Injectable
             // Execute search
             $results = $this->redisIndexing
                 ->limit($offset, $limit)
-                ->sortBy('confidence', false)  // Sort by confidence in descending order
                 ->search($searchQuery, true);
 
             // Extract meme IDs from results
@@ -241,18 +263,23 @@ class SearchService extends Injectable
                 }
             }
 
-            if (empty($memeIds)) {
-                return [];
-            }
-
             return array_unique($memeIds);
+
         } catch (\Exception $e) {
             $this->logger->error(
                 'Search failed: ' . $e->getMessage(),
-                ['exception' => $e, 'query' => $query, 'tags' => $tags, 'language' => $language]
+                ['exception' => $e, 'query' => $query, 'tags' => $tags]
             );
             return [];
         }
+    }
+
+    /**
+     * Escape special characters in search query
+     */
+    private function escapeQuery(string $query): string
+    {
+        return str_replace(['(', ')', '@', '~', '|', '-'], ['\\(', '\\)', '\\@', '\\~', '\\|', '\\-'], $query);
     }
 
     /**
@@ -350,5 +377,76 @@ class SearchService extends Injectable
     public function getIndexName(): string
     {
         return 'memes_idx';
+    }
+
+    /**
+     * Add a single tag to an existing meme document
+     */
+    public function addTag(int $memeId, string $tag, string $language): bool
+    {
+        try {
+            $this->ensureIndex();
+            
+            // Normalize language
+            $language = $this->normalizeLanguage($language);
+
+            // Get existing document
+            $documentId = sprintf("meme:%d", $memeId);
+            $existingDoc = $this->redisIndexing->get($documentId);
+            
+            if (!$existingDoc) {
+                // If no document exists, create new one
+                return $this->indexTags($memeId, [$tag], $language, $this->getMemeType($memeId));
+            }
+
+            // Get existing tags
+            $existingTags = array_filter(explode(' | ', $existingDoc->tag ?? ''));
+            $existingNormalizedTags = array_filter(explode(' | ', $existingDoc->tag_normalized ?? ''));
+
+            // Add new tag
+            if (preg_match('/\p{Arabic}/u', $tag)) {
+                $normalizedTag = $this->normalizeArabicText($tag);
+            } else {
+                $normalizedTag = $this->normalizeTag($tag);
+            }
+
+            // Only add if tag doesn't exist
+            if (!in_array($tag, $existingTags)) {
+                $existingTags[] = $tag;
+                $existingNormalizedTags[] = $normalizedTag;
+            }
+
+            // Create updated document
+            $document = new DocumentMapper($documentId);
+            $document = $document->makeDocument(
+                $memeId,
+                $existingTags,
+                $existingNormalizedTags,
+                $language,
+                $existingDoc->meme_type
+            );
+
+            // Replace the document
+            return $this->redisIndexing->replace($document);
+
+        } catch (\Exception $e) {
+            $this->logger->error(
+                'Failed to add tag: ' . $e->getMessage(),
+                ['exception' => $e, 'memeId' => $memeId, 'tag' => $tag]
+            );
+            throw $e;
+        }
+    }
+
+    /**
+     * Get meme type from database
+     */
+    private function getMemeType(int $memeId): string
+    {
+        $meme = \App\Models\Memes::findFirst($memeId);
+        if (!$meme) {
+            throw new \RuntimeException("Meme not found: {$memeId}");
+        }
+        return $meme->meme_type;
     }
 }

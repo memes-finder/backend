@@ -284,17 +284,18 @@ class AdminController extends ControllerBase
                 if ($tag->save()) {
                     // Index the new tag
                     try {
-                        $this->di->get('searchService')->indexTag(
+                        $this->di->get('searchService')->addTag(
                             $tag->meme_id,
                             $tag->tag,
-                            $tag->language,
-                            $tag->confidence,
-                            $meme->meme_type
+                            $tag->language
                         );
                         $this->flash->success("Tag added successfully");
                     } catch (\Exception $e) {
-                        error_log("Error indexing new tag: " . $e->getMessage());
-                        $this->flash->notice("Tag saved to database but there was an error updating the search index");
+                        $this->logger->error(
+                            "Error indexing tag: " . $e->getMessage(),
+                            ['exception' => $e, 'tag' => $tag->toArray()]
+                        );
+                        $this->flash->error("Tag saved but indexing failed");
                     }
                 } else {
                     $messages = [];
@@ -359,30 +360,33 @@ class AdminController extends ControllerBase
             $tags = $aiService->generateTags($imageUrl);
             $now = date('Y-m-d H:i:s');
             
-            // Save generated tags
+            // Group tags by language
+            $tagsByLang = [];
             foreach ($tags as $language => $langTags) {
+                $tagsByLang[$language] = $langTags;
+            }
+
+            // Save generated tags
+            foreach ($tagsByLang as $lang => $langTags) {
+                // Index each language group
+                $this->di->get('searchService')->indexTags(
+                    $meme->id,
+                    $langTags,
+                    $lang === 'ar' ? 'arabic' : 'english',
+                    $meme->meme_type
+                );
+
                 foreach ($langTags as $tag) {
                     $memeTag = new MemeTags();
                     $memeTag->meme_id = $meme->id;
                     $memeTag->tag = $tag;
-                    $memeTag->language = $language === 'ar' ? 'arabic' : 'english';
+                    $memeTag->language = $lang === 'ar' ? 'arabic' : 'english';
                     $memeTag->confidence = 0.9; // AI tags get high confidence
                     $memeTag->origin = $aiService->getOrigin();
                     $memeTag->created_at = $now;
                     
                     if ($memeTag->save()) {
-                        // Index the new tag
-                        try {
-                            $this->di->get('searchService')->indexTag(
-                                $memeTag->meme_id,
-                                $memeTag->tag,
-                                $memeTag->language,
-                                $memeTag->confidence,
-                                $meme->meme_type
-                            );
-                        } catch (\Exception $e) {
-                            error_log("Error indexing AI tag: " . $e->getMessage());
-                        }
+                        // No need to index again, already done above
                     }
                 }
             }
@@ -713,11 +717,10 @@ class AdminController extends ControllerBase
                     /** @var SearchService $searchService */
                     $searchService = $this->di->get('searchService');
                     try {
-                        $searchService->indexTag(
+                        $searchService->indexTags(
                             $tag->meme_id,
-                            $tag->tag,
+                            [$tag->tag],
                             $tag->language,
-                            $tag->confidence,
                             $tag->getMeme()->meme_type
                         );
                     } catch (\Exception $e) {
