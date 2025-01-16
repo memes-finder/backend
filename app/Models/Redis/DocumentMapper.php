@@ -47,17 +47,17 @@ class DocumentMapper extends Document
      * Create a document for indexing a meme
      * 
      * @param int $memeId
-     * @param string $tag
-     * @param string $normalizedTag
+     * @param array $tags Array of tags
+     * @param array $normalizedTags Array of normalized tags
      * @param string $language
      * @param string $memeType
      * @return $this
      */
-    public function makeDocument(int $memeId, string $tag, string $normalizedTag, string $language, string $memeType)
+    public function makeDocument(int $memeId, array $tags, array $normalizedTags, string $language, string $memeType)
     {
         $this->meme_id = new NumericField('meme_id', $memeId);
-        $this->tag = new TextField('tag', $tag);
-        $this->tag_normalized = new TextField('tag_normalized', $normalizedTag);
+        $this->tag = new TextField('tag', implode(' | ', $tags));
+        $this->tag_normalized = new TextField('tag_normalized', implode(' | ', $normalizedTags));
         $this->language = new TagField('language', $language);
         $this->meme_type = new TagField('meme_type', $memeType);
         return $this;

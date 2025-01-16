@@ -23,34 +23,49 @@ class ReindexTagsTask extends Task
             $this->println("No existing index found or error dropping index: " . $e->getMessage());
         }
 
-        // Get all tags
-        /** @var MemeTags[] $tags */
-        $tags = Tags::find();
+        // Get all memes
+        /** @var Memes[] $memes */
+        $memes = Memes::find();
 
-        $total = count($tags);
+        $total = count($memes);
         $indexed = 0;
         $errors = 0;
 
-        $this->println("Found {$total} tags to reindex");
+        $this->println("Found {$total} memes to reindex");
 
-        foreach ($tags as $tag) {
+        foreach ($memes as $meme) {
             try {
-                $searchService->indexTag(
-                    $tag->meme_id,
-                    $tag->tag,
-                    $tag->language,
-                    $tag->confidence ?? 1.0,
-                    $tag->created_at,
-                    $tag->meme->meme_type
-                );
+                // Get all tags for this meme
+                $tags = $meme->getTags();
+                if ($tags->count() === 0) {
+                    continue;
+                }
+
+                // Group tags by language
+                $tagsByLang = [];
+                foreach ($tags as $tag) {
+                    $tagsByLang[$tag->language][] = $tag->tag;
+                }
+
+                // Index each language group
+                foreach ($tagsByLang as $lang => $langTags) {
+                    $searchService->indexTags(
+                        $meme->id,
+                        $langTags,
+                        $lang,
+                        $meme->meme_type,
+                        true // Replace existing documents
+                    );
+                }
+
                 $indexed++;
 
                 if ($indexed % 100 === 0) {
-                    $this->println("Indexed {$indexed}/{$total} tags");
+                    $this->println("Indexed {$indexed}/{$total} memes");
                 }
             } catch (\Exception $e) {
                 $errors++;
-                $this->println("Error indexing tag {$tag->id}: " . $e->getPrevious()->getMessage());
+                $this->println("Error indexing meme {$meme->id}: " . $e->getPrevious()->getMessage());
             }
         }
 
