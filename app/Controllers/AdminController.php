@@ -284,10 +284,13 @@ class AdminController extends ControllerBase
                 if ($tag->save()) {
                     // Index the new tag
                     try {
-                        $this->di->get('searchService')->addTag(
+                        /** @var SearchService $searchService */
+                        $searchService = $this->di->get('searchService');
+                        $searchService->addTag(
                             $tag->meme_id,
                             $tag->tag,
-                            $tag->language
+                            $tag->language,
+                            $tag->confidence ?? 1.0
                         );
                         $this->flash->success("Tag added successfully");
                     } catch (\Exception $e) {

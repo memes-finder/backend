@@ -32,6 +32,9 @@ class DocumentMapper extends Document
     /** @var TagField */
     public $meme_type;
 
+    /** @var NumericField */
+    public $confidence;
+
     /**
      * DocumentMapper constructor.
      * @param string $id
@@ -51,15 +54,17 @@ class DocumentMapper extends Document
      * @param array $normalizedTags Array of normalized tags
      * @param string $language
      * @param string $memeType
+     * @param float $confidence
      * @return $this
      */
-    public function makeDocument(int $memeId, array $tags, array $normalizedTags, string $language, string $memeType)
+    public function makeDocument(int $memeId, array $tags, array $normalizedTags, string $language, string $memeType, float $confidence = 1.0)
     {
         $this->meme_id = new NumericField('meme_id', $memeId);
         $this->tag = new TextField('tag', implode(' | ', $tags));
         $this->tag_normalized = new TextField('tag_normalized', implode(' | ', $normalizedTags));
         $this->language = new TagField('language', $language);
         $this->meme_type = new TagField('meme_type', $memeType);
+        $this->confidence = new NumericField('confidence', $confidence);
         return $this;
     }
 

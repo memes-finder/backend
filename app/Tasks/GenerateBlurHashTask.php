@@ -24,7 +24,7 @@ class GenerateBlurHashTask extends Task
         $params = [];
 
         // Only process memes that need blur hashes
-        $conditions[] = '(meme_type IN ("image", "video"))';
+        $conditions[] = '(meme_type IN ("image", "video")) AND blur_hash IS NULL';
 
         // Get last processed ID from command line
         $lastId = $this->dispatcher->getParam('last_id');
