@@ -43,6 +43,7 @@ class ApiController extends BaseApiController
             $query = $this->request->getQuery('q', 'string', '');
             $tags = $this->request->getQuery('tags', 'string', '');
             $type = $this->request->getQuery('type', 'string', '');
+            $memeId = $this->request->getQuery('memeId', 'int', 0);
             $page = $this->request->getQuery('page', 'int', 0);
             $limit = $this->request->getQuery('limit', 'int', 20);
             $offset = $page * $limit;
@@ -85,6 +86,11 @@ class ApiController extends BaseApiController
                     $params['type'] = $type;
                 }
 
+                if (!empty($memeId)) {
+                    $conditions[] = 'meme_id = :memeId:';
+                    $params['memeId'] = $memeId;
+                }
+
                 // Get total count first
                 $totalCount = Memes::count([
                     'conditions' => implode(' AND ', $conditions),
@@ -105,9 +111,14 @@ class ApiController extends BaseApiController
                 /** @var SearchService $searchService */
                 $searchService = $this->di->get('searchService');
 
-                // Get meme IDs from search service
-                $memeIds = array_values($searchService->search($query, $tagArray, $responseLanguage, $limit, $offset, $type));
-                $totalMemeIds = array_values($searchService->search($query, $tagArray, $responseLanguage, 1000, 0, $type));
+                if (!empty($memeId)) {
+                    $memeIds = [$memeId];
+                    $totalMemeIds = [$memeId];
+                } else {
+                    // Get meme IDs from search service
+                    $memeIds = array_values($searchService->search($query, $tagArray, $responseLanguage, $limit, $offset, $type));
+                    $totalMemeIds = array_values($searchService->search($query, $tagArray, $responseLanguage, 1000, 0, $type));
+                }
 
                 $memes = [];
                 if (!empty($memeIds)) {
