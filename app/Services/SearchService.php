@@ -179,6 +179,11 @@ class SearchService extends Injectable
             $document = new DocumentMapper($documentId);
             $document = $document->makeDocument($memeId, $originalTags, $normalizedTags, $language, $type, $confidence);
 
+            $existingDocument = $this->di->getCache()['instance']->hgetall($documentId);
+            if (!empty($existingDocument)) {
+                $replace = true;
+            }
+
             return $replace ? $this->redisIndexing->replace($document) : $this->redisIndexing->add($document);
         } catch (\Exception $e) {
             $this->logger->error(
