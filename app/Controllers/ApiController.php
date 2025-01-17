@@ -43,9 +43,9 @@ class ApiController extends BaseApiController
             $query = $this->request->getQuery('q', 'string', '');
             $tags = $this->request->getQuery('tags', 'string', '');
             $type = $this->request->getQuery('type', 'string', '');
-            $page = $this->request->getQuery('page', 'int', 1);
+            $page = $this->request->getQuery('page', 'int', 0);
             $limit = $this->request->getQuery('limit', 'int', 20);
-            $offset = (($page + 1) - 1) * $limit;
+            $offset = $page * $limit;
             $isAll = $this->request->getQuery('all', 'int', 0);
             $order = $isAll ? 'id DESC' : 'rand()';
 
@@ -182,7 +182,7 @@ class ApiController extends BaseApiController
                 'status' => 'success',
                 'data' => [
                     'total' => $totalMemeIds ? count($totalMemeIds) : 0,
-                    'page' => $page,
+                    'page' => $page - 1, // Return zero-based page number
                     'limit' => $limit,
                     'language' => $responseLanguage,
                     'type' => $type,
