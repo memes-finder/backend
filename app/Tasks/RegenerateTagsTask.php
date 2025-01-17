@@ -71,12 +71,15 @@ class RegenerateTagsTask extends Task
                         $memeTag->created_at = $now;
 
                         if ($memeTag->save()) {
-                            // Group tags by language
+                            // Group tags by language and track confidence
                             $tagsByLang = [];
+                            $confidenceByLang = [];
                             foreach ($tags as $lang => $langTags) {
                                 $dbLang = $lang === 'ar' ? 'arabic' : 'english';
                                 foreach ($langTags as $t) {
                                     $tagsByLang[$dbLang][] = $t;
+                                    // AI-generated tags get high confidence
+                                    $confidenceByLang[$dbLang] = 0.9;
                                 }
                             }
 
@@ -87,7 +90,8 @@ class RegenerateTagsTask extends Task
                                     $langTags,
                                     $lang,
                                     $meme->meme_type,
-                                    true // Replace existing documents
+                                    true, // Replace existing documents
+                                    $confidenceByLang[$lang] ?? 1.0 // Use AI confidence
                                 );
                             }
                         }

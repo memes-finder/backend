@@ -56,6 +56,10 @@ class ApiController extends BaseApiController
                 $tagArray = array_filter($tagArray); // Remove empty tags
             }
 
+            if (!empty($query)) {
+                $tagArray = array_merge($tagArray, explode(' ', $query));
+            }
+
             // Get language from header for response formatting
             $responseLanguage = $this->getLanguageFromHeader();
 
@@ -108,23 +112,31 @@ class ApiController extends BaseApiController
                 $memes = [];
                 if (!empty($memeIds)) {
                     $queryParams = [
-                        'conditions' => 'id IN ({ids:array})' . (!empty($type) ? ' AND meme_type = :type:' : ''),
+                        'conditions' => '\App\Models\MemeTags.tag IN ({tags:array}) AND \App\Models\MemeTags.status = :tag_status: AND \App\Models\Memes.id IN ({ids:array}) AND \App\Models\Memes.status = :status:' . (!empty($type) ? ' AND \App\Models\Memes.meme_type = :type:' : ''),
                         'bind' => array_merge(
-                            ['ids' => $memeIds],
+                            [
+                                'ids' => $memeIds,
+                                'tags' => $tagArray,
+                                'status' => Memes::STATUS_APPROVED,
+                                'tag_status' => MemeTags::STATUS_APPROVED,
+                            ],
                             !empty($type) ? ['type' => $type] : []
                         )
                     ];
 
-                    $queryParams['order'] = $order;
-
                     /** @var Memes[] $memes */
-                    $memes = Memes::find($queryParams);
+                    $memes = Memes::query()
+                        ->leftJoin(MemeTags::class, '\App\Models\Memes.id = \App\Models\MemeTags.meme_id')
+                        ->where($queryParams['conditions'], $queryParams['bind'])
+                        ->orderBy('\App\Models\MemeTags.confidence DESC')
+                        ->execute();
 
                     // Get total count of approved memes
                     $totalApprovedCount = Memes::count([
-                        'conditions' => 'id IN ({ids:array})',
+                        'conditions' => 'id IN ({ids:array}) AND status = :status:',
                         'bind' => [
-                            'ids' => $totalMemeIds
+                            'ids' => $totalMemeIds,
+                            'status' => Memes::STATUS_APPROVED
                         ]
                     ]);
                 }

@@ -29,10 +29,15 @@ class IndexTask extends Task
         foreach ($memeTags as $memeTag) {
             if ($memeTag->meme_id !== $currentMemeId) {
                 if ($currentMemeId !== null) {
-                    // Group tags by language
+                    // Group tags by language and track confidence
                     $tagsByLang = [];
+                    $confidenceByLang = [];
                     foreach ($tags as $tag) {
                         $tagsByLang[$tag->language][] = $tag->tag;
+                        // Track highest confidence per language
+                        if (!isset($confidenceByLang[$tag->language]) || $tag->confidence > $confidenceByLang[$tag->language]) {
+                            $confidenceByLang[$tag->language] = $tag->confidence ?? 1.0;
+                        }
                     }
 
                     // Index each language group
@@ -42,7 +47,8 @@ class IndexTask extends Task
                             $langTags,
                             $lang,
                             $memeTag->meme->meme_type,
-                            true // Replace existing documents
+                            true, // Replace existing documents
+                            $confidenceByLang[$lang] ?? 1.0 // Use highest confidence for this language
                         );
                     }
 
@@ -61,10 +67,15 @@ class IndexTask extends Task
 
         // Process the last set of tags
         if (!empty($tags)) {
-            // Group tags by language
+            // Group tags by language and track confidence
             $tagsByLang = [];
+            $confidenceByLang = [];
             foreach ($tags as $tag) {
                 $tagsByLang[$tag->language][] = $tag->tag;
+                // Track highest confidence per language
+                if (!isset($confidenceByLang[$tag->language]) || $tag->confidence > $confidenceByLang[$tag->language]) {
+                    $confidenceByLang[$tag->language] = $tag->confidence ?? 1.0;
+                }
             }
 
             // Index each language group
@@ -74,7 +85,8 @@ class IndexTask extends Task
                     $langTags,
                     $lang,
                     $memeTags[count($memeTags) - 1]->meme->meme_type,
-                    true // Replace existing documents
+                    true, // Replace existing documents
+                    $confidenceByLang[$lang] ?? 1.0 // Use highest confidence for this language
                 );
             }
 

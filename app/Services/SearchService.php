@@ -59,6 +59,7 @@ class SearchService extends Injectable
                 ->addTagField('language', true)
                 ->addTagField('meme_type', true)
                 ->addNumericField('meme_id')
+                ->addNumericField('confidence')  // Add confidence field for sorting
                 ->create();
 
             return true;
@@ -153,7 +154,7 @@ class SearchService extends Injectable
      * 
      * @param bool $replace If true, replace existing document instead of adding new one
      */
-    public function indexTags(int $memeId, array $tags, string $language, string $type, bool $replace = false): bool
+    public function indexTags(int $memeId, array $tags, string $language, string $type, bool $replace = false, float $confidence = 1.0): bool
     {
         try {
             $this->ensureIndex();
@@ -176,7 +177,12 @@ class SearchService extends Injectable
 
             $documentId = sprintf("meme:%d", $memeId);
             $document = new DocumentMapper($documentId);
-            $document = $document->makeDocument($memeId, $originalTags, $normalizedTags, $language, $type);
+            $document = $document->makeDocument($memeId, $originalTags, $normalizedTags, $language, $type, $confidence);
+
+            $existingDocument = $this->di->getCache()['instance']->hgetall($documentId);
+            if (!empty($existingDocument)) {
+                $replace = true;
+            }
 
             return $replace ? $this->redisIndexing->replace($document) : $this->redisIndexing->add($document);
         } catch (\Exception $e) {
@@ -196,10 +202,12 @@ class SearchService extends Injectable
         try {
             $this->ensureIndex();
 
-            $searchParts = [];
+            $searchParts = [
+                'tags' => []
+            ];
 
             // Add text query if provided
-            if (0 && !empty($query)) {
+            if (!empty($query)) {
                 // For Arabic text, apply normalization
                 if (preg_match('/\p{Arabic}/u', $query)) {
                     $normalizedQuery = $this->normalizeArabicText($query);
@@ -208,16 +216,14 @@ class SearchService extends Injectable
                 }
 
                 // Search in both original and normalized tags
-                $searchParts[] = sprintf(
-                    '(@tag:(%s) | @tag_normalized:(%s))',
+                $searchParts['tags'] = [
                     $this->escapeQuery($query),
                     $this->escapeQuery($normalizedQuery)
-                );
+                ];
             }
 
             // Add tag search if provided
             if (!empty($tags)) {
-                $tagQueries = [];
                 foreach ($tags as $tag) {
                     if (preg_match('/\p{Arabic}/u', $tag)) {
                         $normalizedTag = $this->normalizeArabicText($tag);
@@ -225,23 +231,30 @@ class SearchService extends Injectable
                         $normalizedTag = $this->normalizeTag($tag);
                     }
 
-                    $tagQueries[] = sprintf(
-                        '(@tag:(%s) | @tag_normalized:(%s))',
+                    $searchParts['tags'] = array_merge($searchParts['tags'], [
                         $this->escapeQuery($tag),
                         $this->escapeQuery($normalizedTag)
-                    );
+                    ]);
                 }
-                $searchParts[] = '(' . implode(' | ', $tagQueries) . ')';
             }
 
+            $searchParts['tags'] = array_unique($searchParts['tags']);
+
+            $searchParts = [
+                'query' => '('. implode(' | ', array_map(function ($tag) {
+                                return sprintf('@tag:"%s" | @tag_normalized:"%s"', $tag, $tag);
+                        }, $searchParts['tags'])) . ')'
+            ];
+
             // Add language filter if provided
-            if (0 && $language) {
-                $searchParts[] = "@language:{" . $language . "}";
-            }
+//            if (0 && $language) {
+//                $language = $this->normalizeLanguage($language);
+//                $searchParts['language'] = "@language:{" . $language . "}";
+//            }
 
             // Add type filter if provided
             if ($type) {
-                $searchParts[] = "@meme_type:{" . $type . "}";
+                $searchParts['type'] = "@meme_type:{" . $type . "}";
             }
 
             // Build final query
@@ -250,9 +263,12 @@ class SearchService extends Injectable
                 return [];
             }
 
-            // Execute search
+            $this->logger->debug("Search query: " . $searchQuery);
+
+            // Execute search with sorting by confidence
             $results = $this->redisIndexing
                 ->limit($offset, $limit)
+                ->sortBy('confidence', 'DESC') // Sort by confidence in descending order
                 ->search($searchQuery, true);
 
             // Extract meme IDs from results
@@ -279,7 +295,11 @@ class SearchService extends Injectable
      */
     private function escapeQuery(string $query): string
     {
-        return str_replace(['(', ')', '@', '~', '|', '-'], ['\\(', '\\)', '\\@', '\\~', '\\|', '\\-'], $query);
+        return str_replace(
+            ['\\', '"', '@', '~', '&', '|', '<', '>', '{', '}', '[', ']', '(', ')', '^', '*', '?', ':', '=', '-', '+'],
+            ['\\\\', '\\"', '\\@', '\\~', '\\&', '\\|', '\\<', '\\>', '\\{', '\\}', '\\[', '\\]', '\\(', '\\)', '\\^', '\\*', '\\?', '\\:', '\\=', '\\-', '\\+'],
+            $query
+        );
     }
 
     /**
@@ -382,7 +402,7 @@ class SearchService extends Injectable
     /**
      * Add a single tag to an existing meme document
      */
-    public function addTag(int $memeId, string $tag, string $language): bool
+    public function addTag(int $memeId, string $tag, string $language, float $confidence = 1.0): bool
     {
         try {
             $this->ensureIndex();
@@ -392,11 +412,11 @@ class SearchService extends Injectable
 
             // Get existing document
             $documentId = sprintf("meme:%d", $memeId);
-            $existingDoc = $this->redisIndexing->get($documentId);
+            $existingDoc = (object) $this->di->getCache()['instance']->hgetall($documentId);
             
             if (!$existingDoc) {
                 // If no document exists, create new one
-                return $this->indexTags($memeId, [$tag], $language, $this->getMemeType($memeId));
+                return $this->indexTags($memeId, [$tag], $language, $this->getMemeType($memeId), false, $confidence);
             }
 
             // Get existing tags
@@ -423,7 +443,8 @@ class SearchService extends Injectable
                 $existingTags,
                 $existingNormalizedTags,
                 $language,
-                $existingDoc->meme_type
+                $existingDoc->meme_type,
+                max($confidence, (float)($existingDoc->confidence ?? 1.0)) // Keep highest confidence
             );
 
             // Replace the document
