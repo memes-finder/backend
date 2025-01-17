@@ -112,11 +112,10 @@ class ApiController extends BaseApiController
                 $memes = [];
                 if (!empty($memeIds)) {
                     $queryParams = [
-                        'conditions' => '\App\Models\MemeTags.tag IN ({tags:array}) AND \App\Models\MemeTags.status = :tag_status: AND \App\Models\Memes.id IN ({ids:array}) AND \App\Models\Memes.status = :status:' . (!empty($type) ? ' AND \App\Models\Memes.meme_type = :type:' : ''),
+                        'conditions' => '\App\Models\MemeTags.status = :tag_status: AND \App\Models\Memes.id IN ({ids:array}) AND \App\Models\Memes.status = :status:' . (!empty($type) ? ' AND \App\Models\Memes.meme_type = :type:' : ''),
                         'bind' => array_merge(
                             [
                                 'ids' => $memeIds,
-                                'tags' => $tagArray,
                                 'status' => Memes::STATUS_APPROVED,
                                 'tag_status' => MemeTags::STATUS_APPROVED,
                             ],
@@ -126,10 +125,20 @@ class ApiController extends BaseApiController
 
                     /** @var Memes[] $memes */
                     $memes = Memes::query()
+                    ->distinct(['id'])
+                        ->columns([
+                            '\App\Models\Memes.*',
+                            'MAX(\App\Models\MemeTags.confidence) as tag_confidence'
+                        ])
                         ->leftJoin(MemeTags::class, '\App\Models\Memes.id = \App\Models\MemeTags.meme_id')
                         ->where($queryParams['conditions'], $queryParams['bind'])
-                        ->orderBy('\App\Models\MemeTags.confidence DESC')
+                        ->orderBy('tag_confidence DESC')
+                        ->groupBy('\App\Models\Memes.id')
                         ->execute();
+
+                    $memes = array_map(function ($meme) {
+                        return $meme->{"app\Models\Memes"};
+                    }, $memes->toArray());
 
                     // Get total count of approved memes
                     $totalApprovedCount = Memes::count([
@@ -182,7 +191,7 @@ class ApiController extends BaseApiController
                 'status' => 'success',
                 'data' => [
                     'total' => $totalMemeIds ? count($totalMemeIds) : 0,
-                    'page' => $page - 1, // Return zero-based page number
+                    'page' => $page, // Return zero-based page number
                     'limit' => $limit,
                     'language' => $responseLanguage,
                     'type' => $type,
