@@ -202,59 +202,51 @@ class SearchService extends Injectable
         try {
             $this->ensureIndex();
 
-            $searchParts = [
-                'tags' => []
-            ];
+            $searchTags = [];
 
-            // Add text query if provided
+            // Add query text to tags if provided
             if (!empty($query)) {
-                // For Arabic text, apply normalization
-                if (preg_match('/\p{Arabic}/u', $query)) {
-                    $normalizedQuery = $this->normalizeArabicText($query);
-                } else {
-                    $normalizedQuery = $this->normalizeTag($query);
-                }
-
-                // Search in both original and normalized tags
-                $searchParts['tags'] = [
-                    $this->escapeQuery($query),
-                    $this->escapeQuery($normalizedQuery)
-                ];
+                $searchTags[] = $query;
             }
 
-            // Add tag search if provided
+            // Add additional tags if provided
             if (!empty($tags)) {
-                foreach ($tags as $tag) {
-                    if (preg_match('/\p{Arabic}/u', $tag)) {
-                        $normalizedTag = $this->normalizeArabicText($tag);
-                    } else {
-                        $normalizedTag = $this->normalizeTag($tag);
-                    }
+                $searchTags = array_merge($searchTags, $tags);
+            }
 
-                    $searchParts['tags'] = array_merge($searchParts['tags'], [
-                        $this->escapeQuery($tag),
-                        $this->escapeQuery($normalizedTag)
-                    ]);
+            // Build tag search parts
+            $tagList = [];
+            foreach ($searchTags as $tag) {
+                if (preg_match('/\p{Arabic}/u', $tag)) {
+                    $normalizedTag = $this->normalizeArabicText($tag);
+                } else {
+                    $normalizedTag = $this->normalizeTag($tag);
+                }
+                $tagList[] = $this->escapeQuery($tag);
+                if ($tag !== $normalizedTag) {
+                    $tagList[] = $this->escapeQuery($normalizedTag);
                 }
             }
 
-            $searchParts['tags'] = array_unique($searchParts['tags']);
+            // Remove duplicates
+            $tagList = array_unique($tagList);
 
-            $searchParts = [
-                'query' => '('. implode(' | ', array_map(function ($tag) {
-                                return sprintf('@tag:"%s" | @tag_normalized:"%s"', $tag, $tag);
-                        }, $searchParts['tags'])) . ')'
-            ];
+            // Build search query parts
+            $searchParts = [];
 
-            // Add language filter if provided
-//            if (0 && $language) {
-//                $language = $this->normalizeLanguage($language);
-//                $searchParts['language'] = "@language:{" . $language . "}";
-//            }
+            // Add tag search if we have tags
+            if (!empty($tagList)) {
+                $tagQuery = sprintf(
+                    '(@tag:("%s") | @tag_normalized:("%s"))',
+                    implode('" | "', $tagList),
+                    implode('" | "', $tagList)
+                );
+                $searchParts[] = $tagQuery;
+            }
 
             // Add type filter if provided
             if ($type) {
-                $searchParts['type'] = "@meme_type:{" . $type . "}";
+                $searchParts[] = "@meme_type:{" . $type . "}";
             }
 
             // Build final query
@@ -268,7 +260,7 @@ class SearchService extends Injectable
             // Execute search with sorting by confidence
             $results = $this->redisIndexing
                 ->limit($offset, $limit)
-                ->sortBy('confidence', 'DESC') // Sort by confidence in descending order
+                ->sortBy('confidence', 'DESC')
                 ->search($searchQuery, true);
 
             // Extract meme IDs from results
