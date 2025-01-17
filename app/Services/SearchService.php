@@ -197,7 +197,9 @@ class SearchService extends Injectable
         try {
             $this->ensureIndex();
 
-            $searchParts = [];
+            $searchParts = [
+                'tags' => []
+            ];
 
             // Add text query if provided
             if (!empty($query)) {
@@ -209,17 +211,14 @@ class SearchService extends Injectable
                 }
 
                 // Search in both original and normalized tags
-                $searchParts[] = sprintf(
-                    '(@tag:"%s" | @tag_normalized:"%s")',
+                $searchParts['tags'] = [
                     $this->escapeQuery($query),
                     $this->escapeQuery($normalizedQuery)
-                );
+                ];
             }
 
             // Add tag search if provided
-            $tagsNormalizedSearch = [];
             if (!empty($tags)) {
-                $tagQueries = [];
                 foreach ($tags as $tag) {
                     if (preg_match('/\p{Arabic}/u', $tag)) {
                         $normalizedTag = $this->normalizeArabicText($tag);
@@ -227,26 +226,30 @@ class SearchService extends Injectable
                         $normalizedTag = $this->normalizeTag($tag);
                     }
 
-                    $tagsNormalizedSearch[] = $normalizedTag;
-
-                    $tagQueries[] = sprintf(
-                        '(@tag:"%s" | @tag_normalized:"%s")',
+                    $searchParts['tags'] = array_merge($searchParts['tags'], [
                         $this->escapeQuery($tag),
                         $this->escapeQuery($normalizedTag)
-                    );
+                    ]);
                 }
-                $searchParts[] = '(' . implode(' | ', $tagQueries) . ')';
             }
 
+            $searchParts['tags'] = array_unique($searchParts['tags']);
+
+            $searchParts = [
+                'query' => '('. implode(' | ', array_map(function ($tag) {
+                                return sprintf('@tag:"%s" | @tag_normalized:"%s"', $tag, $tag);
+                        }, $searchParts['tags'])) . ')'
+            ];
+
             // Add language filter if provided
-            if (0 && $language) {
-                $language = $this->normalizeLanguage($language);
-                $searchParts[] = "@language:{" . $language . "}";
-            }
+//            if (0 && $language) {
+//                $language = $this->normalizeLanguage($language);
+//                $searchParts['language'] = "@language:{" . $language . "}";
+//            }
 
             // Add type filter if provided
             if ($type) {
-                $searchParts[] = "@meme_type:{" . $type . "}";
+                $searchParts['type'] = "@meme_type:{" . $type . "}";
             }
 
             // Build final query
