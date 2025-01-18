@@ -17,7 +17,8 @@ class LambdaController extends BaseApiController
      *    file_hash: "md5Hash",
      *    file_size, // in bytes
      *    duration, // in seconds
-     *    mime_type: 'application/x-mpegURL'
+     *    mime_type: 'application/x-mpegURL',
+     *    mp4_path: "videos/.../video.mp4" // Path to MP4 version
      * }
      */
     public function createFromVideoAction()
@@ -59,6 +60,8 @@ class LambdaController extends BaseApiController
                     ->setJsonContent(['error' => 'Duplicate video']);
             }
 
+            $mp4Path = preg_replace('/\.m3u8$/', '.mp4', $payload->file_path);
+
             // Create meme record
             $meme = new Memes();
             $meme->file_path = $payload->file_path;
@@ -68,6 +71,7 @@ class LambdaController extends BaseApiController
             $meme->mime_type = $payload->mime_type;
             $meme->meme_type = 'video';
             $meme->thumbnail = $payload->thumbnail_path;
+            $meme->mp4_link = $mp4Path;
             $meme->source_type = 'lambda_upload';
             $meme->status = Memes::STATUS_PENDING;
             $meme->created_at = date('Y-m-d H:i:s');

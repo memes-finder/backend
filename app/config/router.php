@@ -87,6 +87,12 @@ $router->addPost('/api/memes/laugh/{id:[0-9]+}', [
     'action' => 'laugh'
 ]);
 
+// Meme download
+$router->addGet('/api/download/{id:[0-9]+}', [
+    'controller' => 'api',
+    'action' => 'download'
+]);
+
 // Lambda API routes
 $router->addPost('/api/lambda/video', [
     'controller' => 'lambda',

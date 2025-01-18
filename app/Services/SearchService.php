@@ -7,7 +7,6 @@ use App\Models\Redis\DocumentMapper;
 use Ehann\RediSearch\Index;
 use Ehann\RediSearch\Suggestion;
 use Phalcon\Di\Injectable;
-use App\Models\Memes;
 use Phalcon\Logger;
 
 class SearchService extends Injectable

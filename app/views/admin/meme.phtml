@@ -1,9 +1,14 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h3>Edit Meme #<?= $meme->id ?></h3>
-        <a href="/admin" class="btn btn-outline-secondary">
-            <i class="fas fa-arrow-left"></i> Back
-        </a>
+        <div>
+            <button class="btn btn-primary me-2" onclick="downloadMeme(<?= $meme->id ?>)">
+                <i class="fas fa-download"></i> Download
+            </button>
+            <a href="/admin" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back
+            </a>
+        </div>
     </div>
     <div class="card-body">
         <div class="row">
@@ -74,3 +79,37 @@
         </div>
     </div>
 </div>
+
+<script>
+async function downloadMeme(memeId) {
+    try {
+        const button = event.target.closest('button');
+        const originalHtml = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+        const response = await fetch(`/api/download/${memeId}`);
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            // Create temporary link and trigger download
+            const link = document.createElement('a');
+            link.href = data.data.url;
+            link.download = `meme_${memeId}${data.data.url.endsWith('.mp4') ? '.mp4' : '.jpg'}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } else {
+            alert('Download failed: ' + (data.message || 'Unknown error'));
+        }
+
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+    } catch (error) {
+        console.error('Download error:', error);
+        alert('Download failed. Please try again.');
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+    }
+}
+</script>

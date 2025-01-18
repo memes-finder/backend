@@ -8,6 +8,7 @@ use App\Models\SearchLogs;
 use App\Models\MemeViews;
 use App\Models\MemeLaughs;
 use App\Models\MemeTags;
+use Aws\S3\S3Client;
 use Phalcon\Http\ResponseInterface;
 
 class ApiController extends BaseApiController
@@ -444,6 +445,97 @@ class ApiController extends BaseApiController
                 'status' => 'error',
                 'message' => 'An error occurred: ' . $e->getMessage()
             ]);
+        }
+    }
+
+    /**
+     * Download a meme (image or video)
+     * @param int $id Meme ID
+     * @return mixed
+     */
+    public function downloadAction(int $id)
+    {
+        try {
+            /** @var Memes $meme */
+            $meme = Memes::findFirst([
+                'conditions' => 'id = :id: AND status = :status:',
+                'bind' => [
+                    'id' => $id,
+                    'status' => Memes::STATUS_APPROVED
+                ]
+            ]);
+
+            if (!$meme) {
+                return $this->response->setJsonContent([
+                    'status' => 'error',
+                    'message' => 'Meme not found'
+                ])->setStatusCode(404);
+            }
+
+            /** @var S3Client $s3Client */
+            $s3Client = $this->di->get('s3Client');
+            $bucket = $this->di->get('config')->aws->bucket;
+
+            // For images, return a pre-signed URL
+            if ($meme->meme_type === 'image') {
+                $command = $s3Client->getCommand('GetObject', [
+                    'Bucket' => $bucket,
+                    'Key' => $meme->file_path,
+                    'ResponseContentDisposition' => 'attachment; filename="' . basename($meme->file_path) . '"'
+                ]);
+
+                $preSignedUrl = $s3Client->createPresignedRequest($command, '+15 minutes')->getUri();
+
+                return $this->response->setJsonContent([
+                    'status' => 'success',
+                    'data' => [
+                        'url' => (string) $preSignedUrl,
+                        'expires_in' => 900 // 15 minutes in seconds
+                    ]
+                ]);
+            }
+
+            // For videos (m3u8), return MP4 URL
+            if ($meme->meme_type === 'video') {
+                if (!$meme->mp4_link) {
+                    return $this->response->setJsonContent([
+                        'status' => 'error',
+                        'message' => 'MP4 version not available'
+                    ])->setStatusCode(400);
+                }
+
+                $command = $s3Client->getCommand('GetObject', [
+                    'Bucket' => $bucket,
+                    'Key' => $meme->mp4_link,
+                    'ResponseContentDisposition' => 'attachment; filename="meme_' . $meme->id . '.mp4"'
+                ]);
+
+                $preSignedUrl = $s3Client->createPresignedRequest($command, '+15 minutes')->getUri();
+
+                return $this->response->setJsonContent([
+                    'status' => 'success',
+                    'data' => [
+                        'url' => (string)$preSignedUrl,
+                        'expires_in' => 900 // 15 minutes in seconds
+                    ]
+                ]);
+            }
+
+            return $this->response->setJsonContent([
+                'status' => 'error',
+                'message' => 'Unsupported meme type'
+            ])->setStatusCode(400);
+
+        } catch (\Exception $e) {
+            $this->logger->error('Download failed: ' . $e->getMessage(), [
+                'exception' => $e,
+                'meme_id' => $id
+            ]);
+
+            return $this->response->setJsonContent([
+                'status' => 'error',
+                'message' => 'Failed to generate download URL'
+            ])->setStatusCode(500);
         }
     }
 
