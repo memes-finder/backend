@@ -6,6 +6,7 @@ use App\Models\Memes;
 use App\Models\MemeTags;
 use App\Models\MemeViews;
 use App\Models\QueuedUploads;
+use App\Models\Notifications;
 use App\Services\SearchService;
 use App\Services\TaggingServices\TaggingServiceFactory;
 use App\Services\TaggingServices\TaggingServiceInterface;
@@ -751,5 +752,67 @@ class AdminController extends ControllerBase
 
         // Redirect back to pending tags
         return $this->response->redirect('/admin/tags/pending');
+    }
+
+    public function notificationsAction()
+    {
+        if (!$this->view->isLoggedIn) {
+            return $this->response->redirect('/admin/login');
+        }
+
+        if ($this->request->isPost()) {
+            try {
+                $notification = new Notifications();
+                $notification->title = $this->request->getPost('title');
+                $notification->text = $this->request->getPost('text');
+                $notification->color = $this->request->getPost('color', null, '#000000');
+
+                if (!$notification->create()) {
+                    $errors = array_map(function($message) {
+                        return $message->getMessage();
+                    }, $notification->getMessages());
+
+                    $this->flash->error('Failed to create notification: ' . implode(', ', $errors));
+                } else {
+                    $this->flash->success('Notification created successfully');
+                }
+            } catch (\Exception $e) {
+                $this->logger->error('Failed to create notification: ' . $e->getMessage());
+                $this->flash->error('Failed to create notification');
+            }
+        }
+
+        // Get notifications for display
+        $notifications = Notifications::find([
+            'conditions' => 'status = :status:',
+            'bind' => ['status' => Notifications::STATUS_ACTIVE],
+            'order' => 'created_at DESC'
+        ]);
+
+        $this->view->notifications = $notifications;
+        $this->view->pick('admin/notifications');
+    }
+
+    public function deleteNotificationAction(int $id)
+    {
+        if (!$this->view->isLoggedIn) {
+            return $this->response->redirect('/admin/login');
+        }
+
+        try {
+            $notification = Notifications::findFirst($id);
+            if (!$notification) {
+                $this->flash->error('Notification not found');
+            } else if (!$notification->delete()) {
+                $this->flash->error('Failed to delete notification');
+            } else {
+                $this->flash->success('Notification deleted successfully');
+            }
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to delete notification: ' . $e->getMessage());
+            $this->flash->error('Failed to delete notification');
+        }
+
+        return $this->response->redirect('/admin/notifications');
     }
 }

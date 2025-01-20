@@ -53,6 +53,16 @@ $router->add('/admin/delete/{id:[0-9]+}', [
     'action' => 'delete'
 ]);
 
+$router->add('/admin/notifications', [
+    'controller' => 'admin',
+    'action' => 'notifications'
+])->via(['GET', 'POST']);
+
+$router->add('/admin/notifications/delete/{id:[0-9]+}', [
+    'controller' => 'admin',
+    'action' => 'deleteNotification'
+]);
+
 // Define your routes here
 $router->add('/api/search', [
     'controller' => 'api',
@@ -97,6 +107,12 @@ $router->addGet('/api/download/{id:[0-9]+}', [
 $router->addPost('/api/lambda/video', [
     'controller' => 'lambda',
     'action' => 'createFromVideo'
+]);
+
+// Notifications API endpoints
+$router->addGet('/api/notifications', [
+    'controller' => 'notifications',
+    'action' => 'get'
 ]);
 
 // Main page
