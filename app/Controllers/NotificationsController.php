@@ -42,7 +42,7 @@ class NotificationsController extends BaseApiController
                     'title' => $notification['title'],
                     'text' => $notification['text'],
                     'color' => $notification['color'],
-                    'created_at' => $notification['created_at']
+                    'created_at' => date('M d, Y', strtotime($notification['created_at']))
                 ];
             }, $notifications->toArray());
 
