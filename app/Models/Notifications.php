@@ -36,6 +36,11 @@ class Notifications extends Model
     public $status;
 
     /**
+     * @var int
+     */
+    public $sort_order;
+
+    /**
      * @var string
      */
     public $created_at;
@@ -70,6 +75,14 @@ class Notifications extends Model
     {
         $this->created_at = date('Y-m-d H:i:s');
         $this->status = self::STATUS_ACTIVE;
+        
+        // Set default sort order to the highest value + 1
+        $maxOrder = self::maximum([
+            'column' => 'sort_order',
+            'conditions' => 'status = :status:',
+            'bind' => ['status' => self::STATUS_ACTIVE]
+        ]);
+        $this->sort_order = ($maxOrder ?: 0) + 1;
     }
 
     /**

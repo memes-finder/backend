@@ -31,6 +31,7 @@
                         <table class="table table-hover">
                             <thead>
                                 <tr>
+                                    <th style="width: 40px"></th>
                                     <th>Title</th>
                                     <th>Message</th>
                                     <th>Color</th>
@@ -38,9 +39,12 @@
                                     <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="notificationsTableBody">
                                 <?php foreach ($notifications as $notification): ?>
-                                    <tr>
+                                    <tr data-id="<?= $notification->id ?>" class="sortable-row">
+                                        <td>
+                                            <i class="fas fa-grip-vertical handle" style="cursor: move; color: #aaa;"></i>
+                                        </td>
                                         <td><?= $this->escaper->escapeHtml($notification->title) ?></td>
                                         <td><?= $this->escaper->escapeHtml($notification->text) ?></td>
                                         <td>
@@ -66,7 +70,7 @@
                                 <?php endforeach; ?>
                                 <?php if (count($notifications) === 0): ?>
                                     <tr>
-                                        <td colspan="5" class="text-center">No notifications found</td>
+                                        <td colspan="6" class="text-center">No notifications found</td>
                                     </tr>
                                 <?php endif; ?>
                             </tbody>
@@ -77,3 +81,45 @@
         </div>
     </div>
 </div>
+
+<!-- Add Sortable.js library -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var el = document.getElementById('notificationsTableBody');
+    var sortable = new Sortable(el, {
+        animation: 150,
+        handle: '.handle',
+        onEnd: function() {
+            // Get new order
+            var items = [];
+            document.querySelectorAll('.sortable-row').forEach(function(row, index) {
+                items.push({
+                    id: parseInt(row.dataset.id),
+                    order: index + 1
+                });
+            });
+
+            // Save new order
+            fetch('/admin/notifications/order', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ items: items })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status !== 'success') {
+                    alert('Failed to save order: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to save order');
+            });
+        }
+    });
+});
+</script>

@@ -31,7 +31,7 @@ class NotificationsController extends BaseApiController
             $notifications = Notifications::find([
                 'conditions' => 'status = :status:',
                 'bind' => ['status' => Notifications::STATUS_ACTIVE],
-                'order' => 'created_at DESC',
+                'order' => 'sort_order ASC, created_at DESC',
                 'limit' => $limit,
                 'offset' => $offset
             ]);
@@ -42,6 +42,7 @@ class NotificationsController extends BaseApiController
                     'title' => $notification['title'],
                     'text' => $notification['text'],
                     'color' => $notification['color'],
+                    'sort_order' => $notification['sort_order'],
                     'created_at' => date('M d, Y', strtotime($notification['created_at']))
                 ];
             }, $notifications->toArray());

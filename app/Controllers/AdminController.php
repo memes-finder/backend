@@ -786,11 +786,52 @@ class AdminController extends ControllerBase
         $notifications = Notifications::find([
             'conditions' => 'status = :status:',
             'bind' => ['status' => Notifications::STATUS_ACTIVE],
-            'order' => 'created_at DESC'
+            'order' => 'sort_order ASC'
         ]);
 
         $this->view->notifications = $notifications;
         $this->view->pick('admin/notifications');
+    }
+
+    public function updateNotificationOrderAction()
+    {
+        if (!$this->view->isLoggedIn) {
+            return $this->response->setJsonContent([
+                'status' => 'error',
+                'message' => 'Unauthorized'
+            ])->setStatusCode(401);
+        }
+
+        try {
+            $orders = $this->request->getJsonRawBody();
+            if (!$orders || !is_array($orders->items)) {
+                return $this->response->setJsonContent([
+                    'status' => 'error',
+                    'message' => 'Invalid order data'
+                ])->setStatusCode(400);
+            }
+
+            // Update sort orders
+            foreach ($orders->items as $item) {
+                $notification = Notifications::findFirst($item->id);
+                if ($notification) {
+                    $notification->sort_order = $item->order;
+                    $notification->save();
+                }
+            }
+
+            return $this->response->setJsonContent([
+                'status' => 'success',
+                'message' => 'Order updated successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to update notification order: ' . $e->getMessage());
+            return $this->response->setJsonContent([
+                'status' => 'error',
+                'message' => 'Failed to update order'
+            ])->setStatusCode(500);
+        }
     }
 
     public function deleteNotificationAction(int $id)

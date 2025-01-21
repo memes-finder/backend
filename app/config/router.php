@@ -63,6 +63,11 @@ $router->add('/admin/notifications/delete/{id:[0-9]+}', [
     'action' => 'deleteNotification'
 ]);
 
+$router->addPost('/admin/notifications/order', [
+    'controller' => 'admin',
+    'action' => 'updateNotificationOrder'
+]);
+
 // Define your routes here
 $router->add('/api/search', [
     'controller' => 'api',
