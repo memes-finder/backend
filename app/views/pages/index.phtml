@@ -59,9 +59,13 @@
         box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     }
 
-    .download-button:hover {
+    .download-button:not(.disabled):hover {
         transform: translateY(-2px);
         box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    }
+
+    .download-button.disabled{
+        background: rgba(255,255,255,0.1);
     }
 
     .footer {
@@ -112,8 +116,8 @@
     </div>
 
     <div class="download-section">
-        <a href="#" class="download-button">
-            <i class="fab fa-apple"></i> Download for iOS
+        <a href="#" class="download-button disabled">
+            <i class="fab fa-apple"></i> Download for iOS (Soon)
         </a>
         <a href="#" class="download-button">
             <i class="fab fa-android"></i> Download for Android
