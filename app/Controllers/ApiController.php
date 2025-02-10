@@ -144,7 +144,7 @@ class ApiController extends BaseApiController
                         ])
                         ->leftJoin(MemeTags::class, '\App\Models\Memes.id = \App\Models\MemeTags.meme_id')
                         ->where($queryParams['conditions'], $queryParams['bind'])
-                        ->orderBy('tag_confidence DESC')
+                        ->orderBy('rand(), tag_confidence DESC')
                         ->groupBy('\App\Models\Memes.id')
                         ->execute();
 
