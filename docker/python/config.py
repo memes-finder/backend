@@ -32,6 +32,9 @@ VIDEO_TARGET_DURATION = int(os.getenv("VIDEO_TARGET_DURATION", "3"))  # seconds 
 REDIS_HOST = os.getenv("REDIS_HOST", "host.docker.internal")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_DB = int(os.getenv("REDIS_DB", "0"))
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
+REDIS_SSL = os.getenv("REDIS_SSL", "False").lower() in ("true", "1", "yes")
+REDIS_MAX_CONNECTIONS = int(os.getenv("REDIS_MAX_CONNECTIONS", "20"))
 CACHE_TTL = int(os.getenv("CACHE_TTL", "86400"))  # 24 hours
 REDIS_INDEX_NAME = os.getenv("REDIS_INDEX_NAME", "meme_idx")
 

@@ -117,7 +117,14 @@ class MultimodalEncoder:
 
 # Initialize Redis with vector search
 def init_redis():
-    client = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, db=config.REDIS_DB)
+    client = redis.Redis(
+        host=config.REDIS_HOST, 
+        port=config.REDIS_PORT, 
+        db=config.REDIS_DB,
+        password=config.REDIS_PASSWORD,
+        ssl=config.REDIS_SSL,
+        decode_responses=False
+    )
     
     # Create search index for memes
     try:
@@ -184,7 +191,10 @@ logging.info(f"Models converted to float16 on {device}")
 redis_pool = redis.ConnectionPool(
     host=config.REDIS_HOST, 
     port=config.REDIS_PORT, 
-    db=config.REDIS_DB, 
+    db=config.REDIS_DB,
+    password=config.REDIS_PASSWORD,
+    ssl=config.REDIS_SSL,
+    decode_responses=False,
     max_connections=config.REDIS_MAX_CONNECTIONS
 )
 redis_client = redis.Redis(connection_pool=redis_pool)

@@ -30,7 +30,14 @@ if device == 'cuda':
     logger.info("Using half precision (FP16)")
 
 # Initialize Redis connection
-redis_client = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, db=config.REDIS_DB)
+redis_client = redis.Redis(
+    host=config.REDIS_HOST, 
+    port=config.REDIS_PORT, 
+    db=config.REDIS_DB,
+    password=config.REDIS_PASSWORD,
+    ssl=config.REDIS_SSL,
+    decode_responses=False
+)
 
 # Initialize FAISS index
 embedding_dim = model.get_sentence_embedding_dimension()
