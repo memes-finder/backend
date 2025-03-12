@@ -3,7 +3,6 @@
 use Phalcon\Di\FactoryDefault;
 use Phalcon\Loader;
 use Phalcon\Mvc\Application;
-use Phalcon\Config;
 use Dotenv\Dotenv;
 
 define('BASE_PATH', dirname(__DIR__));

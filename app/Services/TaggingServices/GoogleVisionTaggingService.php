@@ -59,68 +59,159 @@ class GoogleVisionTaggingService extends AbstractTaggingService
             $image = (new Image())
                 ->setSource($imageSource);
 
-            // Create feature objects
-            $webDetectionFeature = (new Feature())
-                ->setType(Type::WEB_DETECTION)
-                ->setMaxResults(50);
-
-            $textDetectionFeature = (new Feature())
-                ->setType(Type::TEXT_DETECTION)
-                ->setMaxResults(50);
-
-            $features = [$textDetectionFeature, $webDetectionFeature];
+            // Create feature objects - using all relevant detection types
+            $features = [
+                (new Feature())
+                    ->setType(Type::WEB_DETECTION)
+                    ->setMaxResults(50),
+                (new Feature())
+                    ->setType(Type::TEXT_DETECTION)
+                    ->setMaxResults(50),
+                (new Feature())
+                    ->setType(Type::LABEL_DETECTION)
+                    ->setMaxResults(50),
+                (new Feature())
+                    ->setType(Type::FACE_DETECTION)
+                    ->setMaxResults(10),
+                (new Feature())
+                    ->setType(Type::IMAGE_PROPERTIES)
+                    ->setMaxResults(50)
+            ];
 
             // Perform the API request
             $response = $this->visionClient->annotateImage($image, $features);
             
             $tags = [];
+            $scores = [];  // Track confidence scores for each tag
             
-            // Add web entities
+            // Process web detection results (higher priority)
             $webDetection = $response->getWebDetection();
             if ($webDetection) {
+                // Best guess labels are usually very accurate
                 foreach ($webDetection->getBestGuessLabels() as $label) {
-                    $tags = array_merge($tags, $this->extractTags($label->getLabel()));
+                    $extracted = $this->extractTags($label->getLabel());
+                    foreach ($extracted as $tag) {
+                        $tags[] = $tag;
+                        $scores[$tag] = 0.9;  // High confidence for best guesses
+                    }
                 }
+
+                // Web entities with high confidence
                 foreach ($webDetection->getWebEntities() as $entity) {
-                    if ($entity->getScore() >= 0.5) {
-                        $tags = array_merge($tags, $this->extractTags($entity->getDescription()));
+                    if ($entity->getScore() >= 0.7) {  // Increased threshold
+                        $extracted = $this->extractTags($entity->getDescription());
+                        foreach ($extracted as $tag) {
+                            $tags[] = $tag;
+                            $scores[$tag] = $entity->getScore();
+                        }
                     }
                 }
             }
 
-            // Add text content
+            // Process text annotations
             $textAnnotations = $response->getTextAnnotations();
             if (!empty($textAnnotations[0])) {
                 $fullText = $textAnnotations[0]->getDescription();
                 $fullText = $this->filterTag($fullText);
-                $tags = array_merge($tags, $this->extractTags($fullText));
-            }
-
-            // Clean and validate English tags
-            $enTags = array_unique(array_merge($tags, $this->validateTags(array_unique($tags))));
-
-            // Translate to Arabic
-            $arTags = [];
-            foreach ($enTags as $index => $tag) {
-                if (!preg_match('/\p{Arabic}/u', $tag)) {
-                    try {
-                        $result = $this->translateClient->translate($tag, [
-                            'target' => 'ar'
-                        ]);
-                        $arTags = array_merge($arTags, $this->extractTags($result['text'], 'ar'));
-                    } catch (Exception $e) {
-                        error_log("Error translating tag '{$tag}': " . $e->getMessage());
-                    }
-                } else {
-                    unset($enTags[$index]);
-                    $arTags[] = $tag;
+                
+                // Check if text contains Arabic
+                $hasArabic = preg_match('/\p{Arabic}/u', $fullText);
+                
+                // Extract text-based tags
+                $textTags = $this->extractTags($fullText, $hasArabic ? 'ar' : 'en');
+                foreach ($textTags as $tag) {
+                    $tags[] = $tag;
+                    $scores[$tag] = 0.85;  // High confidence for detected text
                 }
             }
 
+            // Process label annotations
+            foreach ($response->getLabelAnnotations() as $label) {
+                if ($label->getScore() >= 0.8) {  // High threshold for labels
+                    $extracted = $this->extractTags($label->getDescription());
+                    foreach ($extracted as $tag) {
+                        $tags[] = $tag;
+                        $scores[$tag] = $label->getScore();
+                    }
+                }
+            }
+
+            // Process face annotations for emotion tags
+            $faceAnnotations = $response->getFaceAnnotations();
+            if (!empty($faceAnnotations)) {
+                foreach ($faceAnnotations as $face) {
+                    // Add emotion-related tags based on likelihood
+                    $emotions = [
+                        'joy' => $face->getJoyLikelihood(),
+                        'sorrow' => $face->getSorrowLikelihood(),
+                        'anger' => $face->getAngerLikelihood(),
+                        'surprise' => $face->getSurpriseLikelihood()
+                    ];
+
+                    foreach ($emotions as $emotion => $likelihood) {
+                        if ($likelihood >= 3) {  // LIKELY or VERY_LIKELY
+                            $tags[] = $emotion;
+                            $scores[$emotion] = 0.8;
+                            
+                            // Add Arabic equivalents
+                            $arEmotions = [
+                                'joy' => 'سعادة',
+                                'sorrow' => 'حزن',
+                                'anger' => 'غضب',
+                                'surprise' => 'دهشة'
+                            ];
+                            if (isset($arEmotions[$emotion])) {
+                                $tags[] = $arEmotions[$emotion];
+                                $scores[$arEmotions[$emotion]] = 0.8;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Clean and validate English tags
+            $enTags = [];
+            $arTags = [];
+
+            // Sort tags by confidence score
+            arsort($scores);
+            foreach ($scores as $tag => $score) {
+                if (preg_match('/\p{Arabic}/u', $tag)) {
+                    $arTags[] = $tag;
+                } else {
+                    $enTags[] = $tag;
+                }
+            }
+
+            // Translate remaining English tags to Arabic
+            foreach ($enTags as $tag) {
+                try {
+                    $result = $this->translateClient->translate($tag, [
+                        'target' => 'ar',
+                        'source' => 'en'
+                    ]);
+                    
+                    // Only add translation if it's not already present
+                    $translatedTag = $result['text'];
+                    if (!in_array($translatedTag, $arTags)) {
+                        $arTags[] = $translatedTag;
+                    }
+                } catch (Exception $e) {
+                    error_log("Error translating tag '{$tag}': " . $e->getMessage());
+                }
+            }
+
+            // Add meme-related tags if relevant
+            if (str_contains(strtolower(implode(' ', $enTags)), 'meme')) {
+                $enTags[] = 'meme';
+                $arTags[] = 'ميم';
+            }
+
             return [
-                'en' => $enTags,
-                'ar' => $this->validateTags($arTags)
+                'en' => array_slice($this->validateTags($enTags), 0, 20),  // Limit to top 20 tags
+                'ar' => array_slice($this->validateTags($arTags), 0, 20)
             ];
+
         } catch (Exception $e) {
             error_log("Error generating tags with Google Vision for image {$imageUrl}: " . $e->getMessage());
             return ['en' => [], 'ar' => []];

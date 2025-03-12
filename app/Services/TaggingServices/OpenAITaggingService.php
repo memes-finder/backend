@@ -75,28 +75,50 @@ class OpenAITaggingService extends AbstractTaggingService
                 throw new \RuntimeException("Image URL is not accessible");
             }
 
+            $systemPrompt = "You are a meme analysis expert with deep understanding of both English and Arabic internet culture. " .
+                           "Your task is to analyze memes and extract relevant tags that will help in search and categorization. " .
+                           "Focus on: \n" .
+                           "1. The main subject or topic of the meme\n" .
+                           "2. Extract celebrities names if exist\n" .
+                           "3. Specific cultural references (both English and Arabic)\n" .
+                           "4. Common situations or scenarios depicted\n" .
+                           "5. Text content and its meaning\n" .
+                           "6. Visual elements and their significance\n" .
+                           "7. Emotional expressions and reactions shown\n" .
+                           "For Arabic tags, don't just translate English ones - provide culturally relevant Arabic terms.";
+
+            $userPrompt = "Analyze this meme image and provide two sets of tags:\n" .
+                         "1. English tags: Focused on global meme culture and general understanding\n" .
+                         "2. Arabic tags: Specifically relevant to Arabic culture and expressions\n" .
+                         "Format the response as JSON: {\"en\": [\"tag1\", \"tag2\"], \"ar\": [\"tag1\", \"tag2\"]}\n" .
+                         "Keep tags concise (10-15 words) and highly relevant to search.";
+
             $response = $this->openaiClient->chat([
                 'model' => 'gpt-4o-mini',
                 'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => $systemPrompt
+                    ],
                     [
                         'role' => 'user',
                         'content' => [
                             [
                                 'type' => 'text',
-                                'text' => 'Analyze this meme image to extract concise and relevant keywords each in English and Arabic,
-                                            describing its visual content, text, context, emotions and humor,
-                                             while outputting the results in JSON format {"en": [], "ar": []}.'
+                                'text' => $userPrompt
                             ],
                             [
                                 'type' => 'image_url',
                                 'image_url' => [
-                                    'url' => $base64Image
+                                    'url' => $base64Image,
+                                    'detail' => 'auto'
                                 ]
                             ]
                         ]
                     ]
                 ],
-                'max_tokens' => 300
+                'max_tokens' => 500,
+                'temperature' => 0.3  // Lower temperature for more focused outputs
             ]);
 
             if (empty($response)) {
@@ -127,12 +149,30 @@ class OpenAITaggingService extends AbstractTaggingService
             // Process tags through our extraction trait
             $enTags = [];
             foreach ($tags['en'] ?? [] as $tag) {
-                $enTags = array_merge($enTags, $this->extractTags($tag));
+                $extracted = $this->extractTags($tag);
+                if (!empty($extracted)) {
+                    $enTags = array_merge($enTags, $extracted);
+                } else {
+                    // If extraction failed, use the original tag
+                    $enTags[] = $this->filterTag($tag);
+                }
             }
 
             $arTags = [];
             foreach ($tags['ar'] ?? [] as $tag) {
-                $arTags = array_merge($arTags, $this->extractTags($tag, 'ar'));
+                $extracted = $this->extractTags($tag, 'ar');
+                if (!empty($extracted)) {
+                    $arTags = array_merge($arTags, $extracted);
+                } else {
+                    // If extraction failed, use the original tag
+                    $arTags[] = $this->filterTag($tag);
+                }
+            }
+
+            // Add common meme-related tags if relevant
+            if (str_contains(strtolower(implode(' ', $enTags)), 'meme')) {
+                $enTags[] = 'meme';
+                $arTags[] = 'ميم';
             }
 
             $result = [

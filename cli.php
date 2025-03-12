@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\CacheIndexesEnum;
 use Phalcon\Cli\Console;
 use Phalcon\Cli\Dispatcher;
 use Phalcon\Di\FactoryDefault\Cli as CliDI;

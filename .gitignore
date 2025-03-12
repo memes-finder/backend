@@ -6,3 +6,4 @@ storage/chunks/*
 .idea
 schema.sql
 creds/*
+*.sql

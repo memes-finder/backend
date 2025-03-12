@@ -30,12 +30,24 @@ class SearchService extends Injectable
      */
     protected $logger;
 
+    /** @var ArabicStemmerService */
+    private $arabicStemmer;
+
+    /** @var SemanticSearchService */
+    private $semanticSearch;
+
+    /** @var VectorSearchService */
+    private $vectorSearch;
+
     public function __construct()
     {
         $this->logger = $this->getDI()->getLogger();
         $this->redis = $this->getDI()->getCache()['adapter']->redis;
         $this->redisIndexing = $this->getDI()->get('redisIndex');
         $this->redisSuggesting = $this->getDI()->get('redisSuggest');
+        $this->arabicStemmer = new ArabicStemmerService();
+        $this->semanticSearch = new SemanticSearchService();
+        $this->vectorSearch = new VectorSearchService();
     }
 
     /**
@@ -172,6 +184,9 @@ class SearchService extends Injectable
                     $normalizedTags[] = $this->normalizeTag($tag);
                 }
                 $originalTags[] = $tag;
+                
+                // Index tag for semantic search
+                $this->semanticSearch->indexTag($memeId, $tag);
             }
 
             $documentId = sprintf("meme:%d", $memeId);
@@ -200,73 +215,81 @@ class SearchService extends Injectable
     {
         try {
             $this->ensureIndex();
-
-            $searchTags = [];
-
-            // Add query text to tags if provided
-            if (!empty($query)) {
-                $searchTags[] = $query;
-            }
-
-            // Add additional tags if provided
-            if (!empty($tags)) {
-                $searchTags = array_merge($searchTags, $tags);
-            }
-
-            // Build tag search parts
-            $tagList = [];
-            foreach ($searchTags as $tag) {
-                if (preg_match('/\p{Arabic}/u', $tag)) {
-                    $normalizedTag = $this->normalizeArabicText($tag);
-                } else {
-                    $normalizedTag = $this->normalizeTag($tag);
-                }
-                $tagList[] = $this->escapeQuery($tag);
-                if ($tag !== $normalizedTag) {
-                    $tagList[] = $this->escapeQuery($normalizedTag);
-                }
-            }
-
-            // Remove duplicates
-            $tagList = array_unique($tagList);
-
-            // Build search query parts
-            $searchParts = [];
-
-            // Add tag search if we have tags
-            if (!empty($tagList)) {
-                $tagQuery = sprintf(
-                    '(@tag:("%s") | @tag_normalized:("%s"))',
-                    implode('" | "', $tagList),
-                    implode('" | "', $tagList)
-                );
-                $searchParts[] = $tagQuery;
-            }
-
-            // Add type filter if provided
-            if ($type) {
-                $searchParts[] = "@meme_type:{" . $type . "}";
-            }
-
-            // Build final query
-            $searchQuery = implode(' ', $searchParts);
-            if (empty($searchQuery)) {
-                return [];
-            }
-
-            $this->logger->debug("Search query: " . $searchQuery);
-
-            // Execute search with sorting by confidence
-            $results = $this->redisIndexing
-                ->limit($offset, $limit)
-                ->sortBy('confidence', 'DESC')
-                ->search($searchQuery, true);
-
-            // Extract meme IDs from results
             $memeIds = [];
-            foreach ($results->getDocuments() as $document) {
-                if (isset($document['meme_id'])) {
-                    $memeIds[] = (int) $document['meme_id'];
+
+            // If we have a natural language query, try semantic search first
+            if (!empty($query) && preg_match('/\p{Arabic}/u', $query)) {
+                $semanticResults = $this->semanticSearch->semanticSearch($query, 0.3, $limit * 2);
+                if (!empty($semanticResults)) {
+                    // Convert to array of IDs, maintaining order by similarity
+                    $memeIds = array_keys($semanticResults);
+                }
+            }
+
+            // If semantic search didn't yield results or we have additional tags, use traditional search
+            if (empty($memeIds) && !empty($tags) || !empty($query)) {
+                $searchTags = [];
+
+                // Add query text to tags if provided
+                if (!empty($query)) {
+                    $searchTags[] = $query;
+                }
+
+                // Add additional tags if provided
+                if (!empty($tags)) {
+                    $searchTags = array_merge($searchTags, $tags);
+                }
+
+                // Build tag search parts
+                $tagList = [];
+                foreach ($searchTags as $tag) {
+                    if (preg_match('/\p{Arabic}/u', $tag)) {
+                        $normalizedTag = $this->arabicStemmer->stemWord($tag);
+                    } else {
+                        $normalizedTag = $this->normalizeTag($tag);
+                    }
+                    $tagList[] = $this->escapeQuery($tag);
+                    if ($tag !== $normalizedTag) {
+                        $tagList[] = $this->escapeQuery($normalizedTag);
+                    }
+                }
+
+                // Remove duplicates
+                $tagList = array_unique($tagList);
+
+                // Build search query parts
+                $searchParts = [];
+
+                // Add tag search if we have tags
+                if (!empty($tagList)) {
+                    $tagQuery = sprintf(
+                        '(@tag:("%s") | @tag_normalized:("%s"))',
+                        implode('" | "', $tagList),
+                        implode('" | "', $tagList)
+                    );
+                    $searchParts[] = $tagQuery;
+                }
+
+                // Add type filter if provided
+                if ($type) {
+                    $searchParts[] = "@meme_type:{" . $type . "}";
+                }
+
+                // Build final query
+                $searchQuery = implode(' ', $searchParts);
+                if (!empty($searchQuery)) {
+                    // Execute search with sorting by confidence
+                    $results = $this->redisIndexing
+                        ->limit($offset, $limit)
+                        ->sortBy('confidence', 'DESC')
+                        ->search($searchQuery, true);
+
+                    // Extract meme IDs from results
+                    foreach ($results->getDocuments() as $document) {
+                        if (isset($document['meme_id'])) {
+                            $memeIds[] = (int) $document['meme_id'];
+                        }
+                    }
                 }
             }
 
@@ -405,7 +428,7 @@ class SearchService extends Injectable
             $documentId = sprintf("meme:%d", $memeId);
             $existingDoc = (object) $this->di->getCache()['instance']->hgetall($documentId);
             
-            if (!$existingDoc) {
+            if (!$existingDoc || empty((array) $existingDoc)) {
                 // If no document exists, create new one
                 return $this->indexTags($memeId, [$tag], $language, $this->getMemeType($memeId), false, $confidence);
             }
@@ -460,5 +483,20 @@ class SearchService extends Injectable
             throw new \RuntimeException("Meme not found: {$memeId}");
         }
         return $meme->meme_type;
+    }
+
+    /**
+     * Search for memes using hybrid approach (text + vector similarity)
+     * 
+     * @param string $query Query string
+     * @param array $filters Additional filters
+     * @param int $page Page number (0-based)
+     * @param int $limit Results per page
+     * @param float $minScore Minimum score threshold (0-1)
+     * @return array Returns ['items' => array, 'total' => int]
+     */
+    public function hybridSearch(string $query, array $filters = [], int $page = 0, int $limit = 20, float $minScore = 0): array
+    {
+        return $this->vectorSearch->hybridSearch($query, $filters, $page, $limit, $minScore);
     }
 }

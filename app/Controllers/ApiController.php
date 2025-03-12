@@ -47,192 +47,93 @@ class ApiController extends BaseApiController
             $memeId = $this->request->getQuery('memeId', 'int', 0);
             $page = $this->request->getQuery('page', 'int', 0);
             $limit = $this->request->getQuery('limit', 'int', 20);
-            $offset = $page * $limit;
-            $isAll = $this->request->getQuery('all', 'int', 0);
-            $order = $isAll ? 'id DESC' : 'rand()';
 
-            // Parse tags if provided
-            $tagArray = [];
-            if (!empty($tags)) {
-                $tagArray = array_map('trim', explode(',', $tags));
-                $tagArray = array_filter($tagArray); // Remove empty tags
+            $filters = [];
+            if ($type) {
+                $filters['meme_type'] = $type;
+            }
+            if ($tags) {
+                $filters['tags'] = explode(',', $tags);
+            }
+            if ($memeId) {
+                $filters['meme_id'] = $memeId;
             }
 
-            if (!empty($query)) {
-                $tagArray = array_merge($tagArray, explode(' ', $query));
-            }
+            $language = $this->getLanguageFromHeader();
+            $filters['language'] = $language;
 
-            // Get language from header for response formatting
-            $responseLanguage = $this->getLanguageFromHeader();
+            // Use hybrid search for better results
+            $searchService = new SearchService();
+            $searchResults = $searchService->hybridSearch($query, $filters, $page, $limit, 0.4);
+            
+            $results = $searchResults['items'];
+            $total = $searchResults['total'];
 
-            // Log search query if we have one
-            if (!empty($query) || !empty($tagArray)) {
+            // Log search query
+            if ($query) {
                 $searchLog = new SearchLogs();
                 $searchLog->query = $query;
-                $searchLog->tags = implode(',', $tagArray);
-                $searchLog->language = $responseLanguage;
+                $searchLog->language = $language;
+                $searchLog->results_count = $total;
                 $searchLog->save();
             }
-
-            $totalApprovedCount = 0;
-
-            // If no query and no tags, get directly from database
-            if (empty($query) && empty($tagArray)) {
-                // Build conditions
-                $conditions = ['status = :status:'];
-                $params = ['status' => Memes::STATUS_APPROVED];
-                
-                if (!empty($type)) {
-                    $conditions[] = 'meme_type = :type:';
-                    $params['type'] = $type;
-                }
-
-                if (!empty($memeId)) {
-                    $conditions[] = 'meme_id = :memeId:';
-                    $params['memeId'] = $memeId;
-                }
-
-                // Get total count first
-                $totalCount = Memes::count([
-                    'conditions' => implode(' AND ', $conditions),
-                    'bind' => $params
-                ]);
-
-                // Then get the page of results
-                $memes = Memes::find([
-                    'conditions' => implode(' AND ', $conditions),
-                    'bind' => $params,
-                    'order' => $order,
-                    'limit' => $limit,
-                    'offset' => $offset
-                ]);
-
-                $totalMemeIds = range(1, $totalCount);
-            } else {
-                /** @var SearchService $searchService */
-                $searchService = $this->di->get('searchService');
-
-                if (!empty($memeId)) {
-                    $memeIds = [$memeId];
-                    $totalMemeIds = [$memeId];
-                } else {
-                    // Get meme IDs from search service
-                    $memeIds = array_values($searchService->search($query, $tagArray, $responseLanguage, $limit, $offset, $type));
-                    $totalMemeIds = array_values($searchService->search($query, $tagArray, $responseLanguage, 1000, 0, $type));
-                }
-
-                $memes = [];
-                if (!empty($memeIds)) {
-                    $queryParams = [
-                        'conditions' => '\App\Models\MemeTags.status = :tag_status: AND \App\Models\Memes.id IN ({ids:array}) AND \App\Models\Memes.status = :status:' . (!empty($type) ? ' AND \App\Models\Memes.meme_type = :type:' : ''),
-                        'bind' => array_merge(
-                            [
-                                'ids' => $memeIds,
-                                'status' => Memes::STATUS_APPROVED,
-                                'tag_status' => MemeTags::STATUS_APPROVED,
-                            ],
-                            !empty($type) ? ['type' => $type] : []
-                        )
-                    ];
-
-                    /** @var Memes[] $memes */
-                    $memes = Memes::query()
-                    ->distinct(['id'])
-                        ->columns([
-                            '\App\Models\Memes.*',
-                            'MAX(\App\Models\MemeTags.confidence) as tag_confidence'
-                        ])
-                        ->leftJoin(MemeTags::class, '\App\Models\Memes.id = \App\Models\MemeTags.meme_id')
-                        ->where($queryParams['conditions'], $queryParams['bind'])
-                        ->orderBy('rand(), tag_confidence DESC')
-                        ->groupBy('\App\Models\Memes.id')
-                        ->execute();
-
-                    $memes = array_map(function ($meme) {
-                        return $meme->{"app\Models\Memes"};
-                    }, $memes->toArray());
-
-                    // Get total count of approved memes
-                    $totalApprovedCount = Memes::count([
-                        'conditions' => 'id IN ({ids:array}) AND status = :status:',
-                        'bind' => [
-                            'ids' => $totalMemeIds,
-                            'status' => Memes::STATUS_APPROVED
-                        ]
-                    ]);
-                }
-            }
-
-            // Get meme details
+            
+            // Format response
             $formattedResults = [];
+            foreach ($results as $result) {
+                /** @var Memes $meme */
+                $meme = Memes::findFirst($result['id']);
+                if (!$meme) {
+                    continue;
+                }
 
-            foreach ($memes as $meme) {
-                // Get tags in both languages but prioritize response language
-                $primaryTags = array_column($meme->getTagsByLanguage($responseLanguage === 'ar' ? 'arabic' : 'english')->toArray(), 'tag');
-                $secondaryTags = array_column($meme->getTagsByLanguage($responseLanguage === 'ar' ? 'english' : 'arabic')->toArray(), 'tag');
+                $tags = $meme->getTags();
+                $primaryTags = $secondaryTags = [];
 
-                $memesAsArray = [
+                foreach ($tags as $tag) {
+                    if ($tag->language == 'english') {
+                        $primaryTags[] = $tag->tag;
+                    } else {
+                        $secondaryTags[] = $tag->tag;
+                    }
+                }
+
+                $formattedResults[] = [
                     'id' => $meme->id,
                     'url' => $meme->getPublicUrl(),
+                    'blur_hash' => $meme->blur_hash,
+                    'thumbnail' => $meme->getThumbnailUrl(),
                     'width' => $meme->width,
                     'height' => $meme->height,
                     'type' => $meme->meme_type,
-                    'laughs_count' => $meme->getLaughsCount(),
                     'views_count' => $meme->getViewCount(),
-                    'blur_hash' => $meme->blur_hash,
+                    'laughs_count' => $meme->getLaughsCount(),
                     'tags' => [
                         'primary' => $primaryTags,
                         'secondary' => $secondaryTags
                     ]
                 ];
-
-                if ($type == 'video') {
-                    $memesAsArray['thumbnail'] = $meme->getThumbnailUrl();
-                }
-
-                $formattedResults[] = $memesAsArray;
-            }
-
-            // Update search log with results count
-            if (!empty($query) || !empty($tagArray)) {
-                $searchLog->results_count = $totalApprovedCount;
-                $searchLog->save();
             }
 
             return $this->response->setJsonContent([
                 'status' => 'success',
                 'data' => [
-                    'total' => $totalMemeIds ? count($totalMemeIds) : 0,
-                    'page' => $page, // Return zero-based page number
+                    'page' => $page,
                     'limit' => $limit,
-                    'language' => $responseLanguage,
+                    'total' => $total,
+                    'total_pages' => ceil($total / $limit),
+                    'has_more' => ($page + 1) * $limit < $total,
+                    'language' => $language,
                     'type' => $type,
                     'items' => $formattedResults
                 ]
             ]);
-        } catch (\Exception $e) {
-            // Log error details
-            $this->di->get('logger')->error(
-                sprintf(
-                    "[API Error] %s\nFile: %s\nLine: %d\nTrace:\n%s",
-                    $e->getMessage(),
-                    $e->getFile(),
-                    $e->getLine(),
-                    $e->getTraceAsString()
-                ),
-                [
-                    'query' => $query ?? null,
-                    'tags' => $tags ?? null,
-                    'page' => $page ?? null,
-                    'limit' => $limit ?? null,
-                    'language' => $responseLanguage ?? null,
-                    'type' => $type ?? null
-                ]
-            );
 
+        } catch (\Exception $e) {
+            $this->logger->error('Search failed: ' . $e->getMessage());
             return $this->response->setJsonContent([
                 'status' => 'error',
-                'message' => 'An error occurred while processing your search'
+                'message' => 'Search failed'
             ])->setStatusCode(500);
         }
     }

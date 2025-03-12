@@ -3,8 +3,6 @@
 namespace App\Tasks;
 
 use App\Models\Memes;
-use App\Models\MemeTags;
-use App\Models\MemeTags as Tags;
 use App\Services\SearchService;
 use Phalcon\Cli\Task;
 
@@ -46,7 +44,7 @@ class ReindexTagsTask extends Task
                 $confidenceByLang = [];
                 foreach ($tags as $tag) {
                     $tagsByLang[$tag->language][] = $tag->tag;
-                    // Track highest confidence per language
+                    // Track the highest confidence per language
                     if (!isset($confidenceByLang[$tag->language]) || $tag->confidence > $confidenceByLang[$tag->language]) {
                         $confidenceByLang[$tag->language] = $tag->confidence ?? 1.0;
                     }

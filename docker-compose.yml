@@ -58,8 +58,62 @@ services:
       timeout: 3s
       retries: 5
 
+  python-stemmer:
+    build:
+      context: ./docker/python
+      dockerfile: python-stemmer.dockerfile
+    volumes:
+      - ./docker/python/.:/app
+      - huggingface_cache:/huggingface_cache
+    environment:
+      - REDIS_HOST=redis
+      - HF_HOME=/huggingface_cache
+      - TRANSFORMERS_CACHE=/huggingface_cache
+      - HF_DATASETS_CACHE=/huggingface_cache
+    ports:
+      - "5050:5050"
+    networks:
+      - memes-network
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  search:
+    build:
+      context: ./docker/python
+      dockerfile: Dockerfile.search
+    ports:
+      - "5051:5051"
+    volumes:
+      - ./docker/python/.:/app
+      - huggingface_cache:/huggingface_cache
+    environment:
+      - REDIS_HOST=redis
+      - HF_HOME=/huggingface_cache
+      - TRANSFORMERS_CACHE=/huggingface_cache
+      - HF_DATASETS_CACHE=/huggingface_cache
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+            memory: 4G
+        reservations:
+          memory: 2G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
 volumes:
   mysql_data:
   redis_data:
   vendor:
   storage:
+  huggingface_cache:
+
+networks:
+  memes-network:
