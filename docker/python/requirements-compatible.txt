@@ -13,6 +13,7 @@ ftfy==6.1.1
 regex==2023.10.3
 Pillow==10.0.0
 transformers==4.36.2
+python-dotenv==1.0.0
 # Skip tensorflow/keras since they're conflicting and might not be needed for the stemmer
 # If you need TensorFlow functionality, comment out the protobuf pin below
 # tensorflow==2.9.0

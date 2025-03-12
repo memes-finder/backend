@@ -19,25 +19,28 @@ import gc
 from contextlib import nullcontext
 from deepface import DeepFace
 import json
+import config
 
 # Initialize logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, 
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-# Constants
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-EMBEDDING_DIM = 1024  # LLaVA embedding dimension
-BATCH_SIZE = 32
-CACHE_TTL = 86400  # 24 hours
+# Constants imported from config
+DEVICE = config.DEVICE
+EMBEDDING_DIM = config.EMBEDDING_DIM
+BATCH_SIZE = config.BATCH_SIZE
+CACHE_TTL = config.CACHE_TTL
 
 # Initialize models
 class MultimodalEncoder:
     def __init__(self):
         # Initialize LLaVA for visual understanding (better than CLIP for Arabic)
-        self.llava_model = AutoModel.from_pretrained("llava-hf/llava-1.5-7b-hf", trust_remote_code=True)
-        self.llava_processor = AutoProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
+        self.llava_model = AutoModel.from_pretrained(config.LLAVA_MODEL, trust_remote_code=True)
+        self.llava_processor = AutoProcessor.from_pretrained(config.LLAVA_MODEL)
         
         # Initialize Arabic-supported text encoder (multilingual E5)
-        self.text_encoder = SentenceTransformer('intfloat/multilingual-e5-large')
+        self.text_encoder = SentenceTransformer(config.TEXT_MODEL)
         
         # Initialize emotion analyzer
         self.emotion_analyzer = DeepFace
@@ -114,7 +117,7 @@ class MultimodalEncoder:
 
 # Initialize Redis with vector search
 def init_redis():
-    client = redis.Redis(host='localhost', port=6379, db=0)
+    client = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, db=config.REDIS_DB)
     
     # Create search index for memes
     try:
@@ -125,9 +128,9 @@ def init_redis():
             TextField("emotions")  # Emotion analysis results
         )
         
-        client.ft("meme_idx").create_index(schema)
+        client.ft(config.REDIS_INDEX_NAME).create_index(schema)
     except Exception as e:
-        logging.warning(f"Index might already exist: {str(e)}")
+        logger.warning(f"Index might already exist: {str(e)}")
     
     return client
 
@@ -160,15 +163,15 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
 # Initialize models with optimizations
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+device = config.DEVICE
 logging.info(f"Using device: {device}")
 
 # Load CLIP model for image embeddings
-clip_model, clip_preprocess = clip.load("ViT-B/32", device=device, jit=False)
+clip_model, clip_preprocess = clip.load(config.CLIP_MODEL, device=device, jit=False)
 clip_model.eval()
 
 # Load text model for text embeddings
-text_model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-mpnet-base-v2')
+text_model = SentenceTransformer(config.TEXT_MODEL)
 text_model.to(device)
 
 # Convert models to float16 for faster inference
@@ -178,14 +181,19 @@ if device == 'cuda':
 logging.info(f"Models converted to float16 on {device}")
 
 # Initialize Redis connection with connection pooling
-redis_pool = redis.ConnectionPool(host='host.docker.internal', port=6379, db=0, max_connections=20)
+redis_pool = redis.ConnectionPool(
+    host=config.REDIS_HOST, 
+    port=config.REDIS_PORT, 
+    db=config.REDIS_DB, 
+    max_connections=config.REDIS_MAX_CONNECTIONS
+)
 redis_client = redis.Redis(connection_pool=redis_pool)
 
 # Constants
-CLIP_EMBEDDING_DIM = 512
-TEXT_EMBEDDING_DIM = 768
-CACHE_TTL = 86400  # 24 hours
-BATCH_SIZE = 32  # Increased batch size for better GPU utilization
+CLIP_EMBEDDING_DIM = config.CLIP_EMBEDDING_DIM
+TEXT_EMBEDDING_DIM = config.TEXT_EMBEDDING_DIM
+CACHE_TTL = config.CACHE_TTL  # 24 hours
+BATCH_SIZE = config.BATCH_SIZE  # Increased batch size for better GPU utilization
 
 def get_base_url(url: str) -> str:
     """Extract base URL for resolving relative paths"""
@@ -1141,4 +1149,4 @@ def setup_redis_index():
 if __name__ == '__main__':
     # Initialize Redis index
     setup_redis_index()
-    app.run(host='0.0.0.0', port=5051)
+    app.run(host=config.SERVER_HOST, port=config.SEARCH_PORT)

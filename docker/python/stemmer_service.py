@@ -9,22 +9,28 @@ import pickle
 import json
 from concurrent.futures import ThreadPoolExecutor
 import logging
+import config
 
 app = Flask(__name__)
 
-# Initialize model with optimizations
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-print(f"Using device: {device}")
+# Initialize logging
+logging.basicConfig(level=logging.INFO, 
+                   format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-mpnet-base-v2')
+# Initialize model with optimizations
+device = config.DEVICE
+logger.info(f"Using device: {device}")
+
+model = SentenceTransformer(config.STEMMER_MODEL)
 model.to(device)
 
 if device == 'cuda':
     model.half()  # Convert to FP16 if using GPU
-    print("Using half precision (FP16)")
+    logger.info("Using half precision (FP16)")
 
 # Initialize Redis connection
-redis_client = redis.Redis(host='host.docker.internal', port=6379, db=0)
+redis_client = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, db=config.REDIS_DB)
 
 # Initialize FAISS index
 embedding_dim = model.get_sentence_embedding_dimension()
@@ -49,7 +55,7 @@ def get_embedding(text: str) -> np.ndarray:
         
         # Cache the embedding
         redis_client.set(cache_key, embedding_np.tobytes())
-        redis_client.expire(cache_key, 86400)  # Cache for 24 hours
+        redis_client.expire(cache_key, config.CACHE_TTL)
         
         return embedding_np
 
@@ -71,7 +77,7 @@ def batch_get_embeddings(texts: List[str]) -> Dict[str, np.ndarray]:
     
     if texts_to_encode:
         # Process in smaller batches to manage memory
-        batch_size = 16  # Reduced from 32
+        batch_size = config.BATCH_SIZE  # Reduced from 32
         for i in range(0, len(texts_to_encode), batch_size):
             batch = texts_to_encode[i:i+batch_size]
             
@@ -94,7 +100,7 @@ def batch_get_embeddings(texts: List[str]) -> Dict[str, np.ndarray]:
                 for text, embedding in zip(batch, batch_np):
                     cache_key = f"embedding:{text}"
                     redis_client.set(cache_key, embedding.tobytes())
-                    redis_client.expire(cache_key, 86400)  # Cache for 24 hours
+                    redis_client.expire(cache_key, config.CACHE_TTL)  # Cache for 24 hours
                     embeddings[text] = embedding
                 
                 # Clear memory
@@ -121,7 +127,7 @@ def update_index():
                 
                 # Verify embedding dimension
                 if embedding.size != embedding_dim:
-                    print(f"Warning: Embedding dimension mismatch for key {key}: expected {embedding_dim}, got {embedding.size}")
+                    logger.warning(f"Warning: Embedding dimension mismatch for key {key}: expected {embedding_dim}, got {embedding.size}")
                     skipped += 1
                     continue
                     
@@ -133,12 +139,12 @@ def update_index():
                     
                     # Verify embedding dimension
                     if embedding.size != embedding_dim:
-                        print(f"Warning: Embedding dimension mismatch for key {key}: expected {embedding_dim}, got {embedding.size}")
+                        logger.warning(f"Warning: Embedding dimension mismatch for key {key}: expected {embedding_dim}, got {embedding.size}")
                         skipped += 1
                         continue
                         
                 except (json.JSONDecodeError, KeyError):
-                    print(f"Warning: Could not parse embedding data for key {key}")
+                    logger.warning(f"Warning: Could not parse embedding data for key {key}")
                     skipped += 1
                     continue
             
@@ -148,10 +154,10 @@ def update_index():
             meme_tag_ids.append((int(meme_id), tag))
     
     if skipped > 0:
-        print(f"Skipped {skipped} embeddings due to parsing errors or dimension mismatch")
+        logger.warning(f"Skipped {skipped} embeddings due to parsing errors or dimension mismatch")
     
     if embeddings:
-        print(f"Processing {len(embeddings)} embeddings")
+        logger.info(f"Processing {len(embeddings)} embeddings")
         
         # Convert to numpy array and normalize
         embeddings_array = np.vstack(embeddings)
@@ -163,9 +169,9 @@ def update_index():
         
         # Store meme_tag_ids mapping
         redis_client.set('meme_tag_ids_mapping', pickle.dumps(meme_tag_ids))
-        print(f"Successfully updated index with {len(embeddings)} embeddings")
+        logger.info(f"Successfully updated index with {len(embeddings)} embeddings")
     else:
-        print("No valid embeddings found to update index")
+        logger.info("No valid embeddings found to update index")
 
 @app.route('/index-tag', methods=['POST'])
 def index_tag():
@@ -276,7 +282,7 @@ def batch_index_tags():
     
     try:
         # Process tags in smaller batches
-        batch_size = 100  # Process 100 memes at a time
+        batch_size = config.BATCH_SIZE  # Process 100 memes at a time
         for i in range(0, len(meme_tags), batch_size):
             batch = meme_tags[i:i+batch_size]
             
@@ -338,4 +344,4 @@ def batch_embeddings():
 if __name__ == '__main__':
     # Initialize index on startup
     update_index()
-    app.run(host='0.0.0.0', port=5050)
+    app.run(host=config.SERVER_HOST, port=config.STEMMER_PORT)
