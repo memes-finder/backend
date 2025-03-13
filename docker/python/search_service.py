@@ -917,8 +917,8 @@ def batch_index_memes():
         logging.error(f"Error in batch indexing: {str(e)}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-@app.route('/search', methods=['POST'])
-def search():
+@app.route('/search_by_text', methods=['POST'])
+def search_by_text():
     """Search for memes using text query"""
     try:
         data = request.get_json()

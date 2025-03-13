@@ -113,7 +113,7 @@ class VectorSearchService extends Injectable
     public function search(string $query, int $limit = 10, array $filters = []): array
     {
         try {
-            $response = $this->httpClient->post('/search', [
+            $response = $this->httpClient->post('/search_by_text', [
                 'json' => [
                     'query' => $query,
                     'limit' => $limit
