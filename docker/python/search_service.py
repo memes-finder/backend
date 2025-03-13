@@ -36,7 +36,13 @@ CACHE_TTL = config.CACHE_TTL
 class MultimodalEncoder:
     def __init__(self):
         # Initialize LLaVA for visual understanding (better than CLIP for Arabic)
-        self.llava_model = LlavaForConditionalGeneration.from_pretrained(config.LLAVA_MODEL, trust_remote_code=True)
+        self.llava_model = LlavaForConditionalGeneration.from_pretrained(
+            config.LLAVA_MODEL,
+            torch_dtype=torch.float16 if DEVICE == "cuda" else torch.float32,
+            use_flash_attention_2=False,  # Disable flash attention to avoid CUDA errors
+            use_cache=True,
+            low_cpu_mem_usage=True
+        )
         self.llava_processor = AutoProcessor.from_pretrained(config.LLAVA_MODEL)
         
         # Initialize Arabic-supported text encoder (multilingual E5)
