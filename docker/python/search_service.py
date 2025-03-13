@@ -36,6 +36,7 @@ import cv2
 import redis
 from redis.commands.search.field import VectorField, TagField, TextField
 from redis.commands.search.query import Query
+from redis.commands.search.indexDefinition import IndexDefinition
 import m3u8
 import tempfile
 import subprocess
