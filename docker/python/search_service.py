@@ -69,7 +69,6 @@ class MultimodalEncoder:
             config.LLAVA_MODEL,
             torch_dtype=torch.float16 if DEVICE == "cuda" else torch.float32,
             use_flash_attention_2=False,  # Disable flash attention to avoid CUDA errors
-            use_cache=True,
             low_cpu_mem_usage=True
         )
         self.llava_processor = AutoProcessor.from_pretrained(config.LLAVA_MODEL)
