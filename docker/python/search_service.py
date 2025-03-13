@@ -1,5 +1,34 @@
 import torch
+# Apply monkey patch for huggingface_hub before importing sentence_transformers
+import huggingface_hub
+import importlib.util
+import sys
+
+# Add backward compatibility for cached_download
+if not hasattr(huggingface_hub, 'cached_download'):
+    def cached_download(url, *args, **kwargs):
+        try:
+            # Extract repo_id and filename from url
+            if "huggingface.co" in url:
+                parts = url.split("/")
+                repo_idx = parts.index("huggingface.co") + 1
+                if repo_idx < len(parts):
+                    repo_id = "/".join(parts[repo_idx:repo_idx+2])
+                    filename = parts[-1]
+                    cache_dir = kwargs.get("cache_dir", None)
+                    return huggingface_hub.hf_hub_download(repo_id=repo_id, filename=filename, cache_dir=cache_dir)
+            # Fallback for non-HF URLs
+            return url
+        except Exception as e:
+            print(f"Error in cached_download: {e}")
+            return url
+    
+    # Add cached_download to huggingface_hub module
+    huggingface_hub.cached_download = cached_download
+    print("Added cached_download compatibility function to huggingface_hub")
+
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor, LlavaForConditionalGeneration
+# Now import sentence_transformers after the patch
 from sentence_transformers import SentenceTransformer
 import numpy as np
 from PIL import Image
