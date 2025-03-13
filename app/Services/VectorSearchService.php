@@ -27,6 +27,8 @@ class VectorSearchService extends Injectable
             'base_uri' => $this->searchServiceUrl,
             'timeout' => 30,
         ]);
+        
+        $this->logger->info("Initialized Vector Search Service with URL: {$this->searchServiceUrl}");
     }
     
     /**

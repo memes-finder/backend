@@ -385,27 +385,71 @@ def get_video_embedding(video_url: str) -> np.ndarray:
         # Try to extract frames
         frames = extract_video_frames(video_url)
         
-        # If frame extraction fails, try to get thumbnail
+        # If frame extraction fails, try to get thumbnail or use HTTP request
         if not frames:
             logging.warning(f"Frame extraction failed for {video_url}, falling back to thumbnail")
             try:
-                # Try to get first frame using basic ffmpeg command
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    thumb_path = os.path.join(temp_dir, "thumb.jpg")
-                    cmd = [
-                        'ffmpeg', '-i', video_url,
-                        '-vframes', '1',
-                        '-y', thumb_path
+                # For HLS streams, try to get the preview image if available
+                if video_url.endswith('.m3u8'):
+                    # Extract base name without extension
+                    base_url = video_url.rsplit('/', 1)[0] if '/' in video_url else ''
+                    file_name = video_url.rsplit('/', 1)[1] if '/' in video_url else video_url
+                    base_name = file_name.rsplit('.', 1)[0] if '.' in file_name else file_name
+                    
+                    # Try common thumbnail patterns
+                    thumb_candidates = [
+                        f"{base_url}/{base_name}.jpg",
+                        f"{base_url}/{base_name}_preview.jpg",
+                        f"{base_url}/{base_name}_thumb.jpg"
                     ]
-                    result = subprocess.run(cmd, capture_output=True, text=True)
-                    if result.returncode == 0 and os.path.exists(thumb_path):
-                        frames = [Image.open(thumb_path)]
-                    else:
-                        raise ValueError("Thumbnail extraction failed")
+                    
+                    for thumb_url in thumb_candidates:
+                        try:
+                            logging.info(f"Trying thumbnail URL: {thumb_url}")
+                            response = requests.get(thumb_url, timeout=5)
+                            if response.status_code == 200 and response.content:
+                                img = Image.open(BytesIO(response.content))
+                                frames = [img]
+                                logging.info(f"Successfully loaded thumbnail: {thumb_url}")
+                                break
+                        except Exception as thumb_err:
+                            logging.debug(f"Failed to load thumbnail {thumb_url}: {str(thumb_err)}")
+                
+                # If still no frames, try direct ffmpeg thumbnail extraction
+                if not frames:
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        thumb_path = os.path.join(temp_dir, "thumb.jpg")
+                        # For HLS, try downloading video first
+                        if video_url.endswith('.m3u8'):
+                            try:
+                                # Just use the first segment directly for thumbnail
+                                base_url = get_base_url(video_url)
+                                playlist = m3u8.load(video_url)
+                                if playlist.segments and len(playlist.segments) > 0:
+                                    segment_url = urljoin(base_url, playlist.segments[0].uri)
+                                    logging.info(f"Using first segment for thumbnail: {segment_url}")
+                                    video_url = segment_url
+                            except Exception as e:
+                                logging.error(f"Error processing HLS for thumbnail: {str(e)}")
+                                
+                        cmd = [
+                            'ffmpeg', '-i', video_url,
+                            '-vframes', '1',
+                            '-y', thumb_path
+                        ]
+                        result = subprocess.run(cmd, capture_output=True, text=True)
+                        if result.returncode == 0 and os.path.exists(thumb_path):
+                            frames = [Image.open(thumb_path)]
+                        else:
+                            raise ValueError("Thumbnail extraction failed")
             except Exception as thumb_err:
-                logging.error(f"Thumbnail extraction failed for {video_url}: {str(thumb_err)}")
-                # Return zero vector as last resort
-                return np.zeros(CLIP_EMBEDDING_DIM, dtype=np.float32)
+                logging.error(f"All thumbnail extraction methods failed for {video_url}: {str(thumb_err)}")
+                # As a last resort, return a zero vector
+                logging.warning(f"Using zero vector for {video_url}")
+                zero_embedding = np.zeros(CLIP_EMBEDDING_DIM, dtype=np.float32)
+                # Still cache the zero vector to avoid repeated failures
+                redis_client.set(cache_key, zero_embedding.tobytes(), ex=CACHE_TTL)
+                return zero_embedding
         
         # Get embeddings for each frame
         frame_embeddings = []
@@ -424,14 +468,16 @@ def get_video_embedding(video_url: str) -> np.ndarray:
         embedding_np = np.mean(frame_embeddings, axis=0).astype(np.float32)
         
         # Cache the embedding
-        redis_client.set(cache_key, embedding_np.tobytes())
-        redis_client.expire(cache_key, CACHE_TTL)
+        redis_client.set(cache_key, embedding_np.tobytes(), ex=CACHE_TTL)
         
         return embedding_np
-        
+    
     except Exception as e:
-        logging.error(f"Error generating video embedding for {video_url}: {str(e)}")
-        return np.zeros(CLIP_EMBEDDING_DIM, dtype=np.float32)  # Return zero vector on error
+        logging.error(f"Error getting video embedding for {video_url}: {str(e)}")
+        # Return zero vector as last resort
+        zero_embedding = np.zeros(CLIP_EMBEDDING_DIM, dtype=np.float32)
+        redis_client.set(cache_key, zero_embedding.tobytes(), ex=CACHE_TTL)
+        return zero_embedding
 
 def get_image_embedding(image_url: str) -> np.ndarray:
     """Generate CLIP embedding for an image with caching"""
@@ -476,8 +522,7 @@ def get_image_embedding(image_url: str) -> np.ndarray:
             embedding_np = image_features.cpu().numpy().astype(np.float32)
             
         # Cache the embedding
-        redis_client.set(cache_key, embedding_np.tobytes())
-        redis_client.expire(cache_key, CACHE_TTL)
+        redis_client.set(cache_key, embedding_np.tobytes(), ex=CACHE_TTL)
         
         return embedding_np
         
@@ -510,8 +555,7 @@ def get_text_embedding(text: str) -> np.ndarray:
             embedding_np = embedding.cpu().numpy().astype(np.float32)
             
         # Cache the embedding
-        redis_client.set(cache_key, embedding_np.tobytes())
-        redis_client.expire(cache_key, CACHE_TTL)
+        redis_client.set(cache_key, embedding_np.tobytes(), ex=CACHE_TTL)
         
         return embedding_np
     except Exception as e:
