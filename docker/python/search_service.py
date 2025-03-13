@@ -203,19 +203,8 @@ logging.basicConfig(level=logging.INFO)
 device = config.DEVICE
 logging.info(f"Using device: {device}")
 
-# Load CLIP model for image embeddings
-clip_model, clip_preprocess = clip.load(config.CLIP_MODEL, device=device, jit=False)
-clip_model.eval()
-
-# Load text model for text embeddings
-text_model = SentenceTransformer(config.TEXT_MODEL)
-text_model.to(device)
-
-# Convert models to float16 for faster inference
-if device == 'cuda':
-    clip_model = clip_model.half()
-    text_model = text_model.half()
-logging.info(f"Models converted to float16 on {device}")
+# We're using the models already loaded in MultimodalEncoder
+# No need to load CLIP model again here
 
 # Initialize Redis connection with connection pooling
 redis_pool = redis.ConnectionPool(
@@ -423,11 +412,11 @@ def get_video_embedding(video_url: str) -> np.ndarray:
         with torch.cuda.amp.autocast() if device == 'cuda' else nullcontext():
             for frame in frames:
                 # Preprocess frame
-                frame_input = clip_preprocess(frame).unsqueeze(0).to(device)
+                frame_input = encoder.image_processor(images=frame, return_tensors="pt").to(device)
                 
                 # Get embedding
                 with torch.no_grad():
-                    frame_features = clip_model.encode_image(frame_input)
+                    frame_features = encoder.image_model.get_image_features(**frame_input)
                     frame_features /= frame_features.norm(dim=-1, keepdim=True)
                     frame_embeddings.append(frame_features.cpu().numpy())
         
@@ -474,13 +463,13 @@ def get_image_embedding(image_url: str) -> np.ndarray:
         if image.mode != 'RGB':
             image = image.convert('RGB')
             
-        image_input = clip_preprocess(image).unsqueeze(0).to(device)
+        image_input = encoder.image_processor(images=image, return_tensors="pt").to(device)
         
         # Ensure input is float32
         image_input = image_input.float()
         
         with torch.no_grad():
-            image_features = clip_model.encode_image(image_input)
+            image_features = encoder.image_model.get_image_features(**image_input)
             # Ensure output is float32
             image_features = image_features.float()
             image_features /= image_features.norm(dim=-1, keepdim=True)
@@ -510,7 +499,7 @@ def get_text_embedding(text: str) -> np.ndarray:
     try:
         with torch.no_grad():
             # Ensure input text tensor is float32
-            embedding = text_model.encode(
+            embedding = encoder.text_encoder.encode(
                 text,
                 convert_to_tensor=True,
                 normalize_embeddings=True,
@@ -862,7 +851,7 @@ def batch_index_memes():
                     text_embeddings = []
                     for j in range(0, len(text_contents), BATCH_SIZE):
                         sub_batch = text_contents[j:j+BATCH_SIZE]
-                        batch_embeddings = text_model.encode(
+                        batch_embeddings = encoder.text_encoder.encode(
                             sub_batch,
                             convert_to_tensor=True,
                             normalize_embeddings=True,
