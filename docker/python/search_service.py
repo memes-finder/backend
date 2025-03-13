@@ -180,8 +180,6 @@ redis_client = init_redis()
 from flask import Flask, request, jsonify
 import torch
 from PIL import Image
-import clip
-from sentence_transformers import SentenceTransformer
 import numpy as np
 from typing import List, Dict, Union, Tuple
 import requests
