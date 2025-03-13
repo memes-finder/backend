@@ -15,11 +15,11 @@ load_dotenv()
 DEVICE = os.getenv("PYTHON_DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
 
 # Model configurations
-EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1024"))  # Default: LLaVA embedding dimension
-LLAVA_MODEL = os.getenv("LLAVA_MODEL", "llava-hf/llava-1.5-7b-hf")
+EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "768"))  # Default: CLIP embedding dimension
+LLAVA_MODEL = os.getenv("LLAVA_MODEL", "llava-hf/llava-1.5-7b-hf")  # Kept for backward compatibility
+CLIP_MODEL = os.getenv("CLIP_MODEL", "openai/clip-vit-base-patch32")  # Added CLIP model configuration
 TEXT_MODEL = os.getenv("TEXT_MODEL", "intfloat/multilingual-e5-large")
 STEMMER_MODEL = os.getenv("STEMMER_MODEL", "sentence-transformers/paraphrase-multilingual-mpnet-base-v2")
-CLIP_MODEL = os.getenv("CLIP_MODEL", "ViT-B/32")
 CLIP_EMBEDDING_DIM = int(os.getenv("CLIP_EMBEDDING_DIM", "512"))
 TEXT_EMBEDDING_DIM = int(os.getenv("TEXT_EMBEDDING_DIM", "768"))
 

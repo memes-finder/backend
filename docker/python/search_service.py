@@ -27,7 +27,7 @@ if not hasattr(huggingface_hub, 'cached_download'):
     huggingface_hub.cached_download = cached_download
     print("Added cached_download compatibility function to huggingface_hub")
 
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor, LlavaForConditionalGeneration
+from transformers import AutoTokenizer, AutoProcessor, CLIPProcessor, CLIPModel
 # Now import sentence_transformers after the patch
 from sentence_transformers import SentenceTransformer
 import numpy as np
@@ -64,37 +64,35 @@ CACHE_TTL = config.CACHE_TTL
 # Initialize models
 class MultimodalEncoder:
     def __init__(self):
-        # Initialize LLaVA for visual understanding (better than CLIP for Arabic)
-        self.llava_model = LlavaForConditionalGeneration.from_pretrained(
-            config.LLAVA_MODEL,
-            torch_dtype=torch.float16 if DEVICE == "cuda" else torch.float32,
-            use_flash_attention_2=False,  # Disable flash attention to avoid CUDA errors
-            low_cpu_mem_usage=True
-        )
-        self.llava_processor = AutoProcessor.from_pretrained(config.LLAVA_MODEL)
+        # Initialize CLIP for visual understanding (instead of LLaVA to avoid flash-attention issues)
+        print("Loading image encoder model (CLIP)...")
+        self.image_model = CLIPModel.from_pretrained(config.CLIP_MODEL)
+        self.image_processor = CLIPProcessor.from_pretrained(config.CLIP_MODEL)
         
         # Initialize Arabic-supported text encoder (multilingual E5)
+        print("Loading text encoder model (Sentence Transformer)...")
         self.text_encoder = SentenceTransformer(config.TEXT_MODEL)
         
         # Initialize emotion analyzer
         self.emotion_analyzer = DeepFace
         
         # Move models to GPU if available
-        self.llava_model.to(DEVICE)
+        self.image_model.to(DEVICE)
         self.text_encoder.to(DEVICE)
+        print("All models loaded successfully")
         
         # Set models to eval mode
-        self.llava_model.eval()
+        self.image_model.eval()
         
     @torch.no_grad()
     def encode_image(self, image: Image.Image) -> np.ndarray:
-        """Generate embeddings for an image using LLaVA"""
+        """Generate embeddings for an image using CLIP"""
         try:
             # Process image
-            inputs = self.llava_processor(images=image, return_tensors="pt").to(DEVICE)
+            inputs = self.image_processor(images=image, return_tensors="pt").to(DEVICE)
             
             # Get embeddings
-            outputs = self.llava_model.get_image_features(**inputs)
+            outputs = self.image_model.get_image_features(**inputs)
             embedding = outputs.detach().cpu().numpy().mean(axis=1)  # Average pooling
             
             # Normalize
