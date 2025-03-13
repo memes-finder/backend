@@ -7,7 +7,7 @@ redis>=4.5.1
 numpy>=1.23.0,<2.0.0
 # Skip torch as it's pre-installed in the container
 # torch==2.1.0
-huggingface-hub==0.19.4
+huggingface-hub==0.13.4  # This version has cached_download for sentence-transformers
 faiss-cpu==1.7.4
 ftfy>=6.1.1
 regex==2023.10.3
@@ -32,3 +32,4 @@ requests==2.31.0
 # - onnx requires protobuf>=3.20.2
 # You may need to choose which is more important for your application
 protobuf==3.19.6  # Compatible with tensorboard, may cause onnx warnings
+accelerate==1.5.1
