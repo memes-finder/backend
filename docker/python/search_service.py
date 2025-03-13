@@ -50,6 +50,7 @@ from contextlib import nullcontext
 from deepface import DeepFace
 import json
 import config
+import glob
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO, 
@@ -263,7 +264,7 @@ def extract_video_frames(video_url: str, num_frames: int = 5) -> List[Image.Imag
                     total_duration = 0
                     target_duration = 3  # Get first 3 seconds
                     
-                    for segment in playlist.segments:
+                    for i, segment in enumerate(playlist.segments):
                         if total_duration >= target_duration:
                             break
                         
@@ -271,34 +272,36 @@ def extract_video_frames(video_url: str, num_frames: int = 5) -> List[Image.Imag
                         segment_url = urljoin(base_url, segment.uri)
                         logging.info(f"Downloading segment: {segment_url}")
                         
-                        segment_path = os.path.join(temp_dir, f"segment_{len(segment_files)}.ts")
+                        segment_path = os.path.join(temp_dir, f"segment_{i}.ts")
                         response = requests.get(segment_url, timeout=10)
                         response.raise_for_status()
                         
                         with open(segment_path, 'wb') as f:
                             f.write(response.content)
+                        
+                        # Verify the segment file is not empty
+                        if os.path.getsize(segment_path) == 0:
+                            logging.warning(f"Segment file is empty: {segment_path}")
+                            continue
+                        
                         segment_files.append(segment_path)
                         total_duration += segment.duration
                     
                     if not segment_files:
                         raise ValueError("No segments downloaded")
                     
-                    # Concatenate segments
-                    concat_list = os.path.join(temp_dir, "concat.txt")
-                    with open(concat_list, 'w') as f:
-                        for file in segment_files:
-                            f.write(f"file '{file}'\n")
-                    
-                    # Use basic ffmpeg command for concatenation
-                    cmd = [
-                        'ffmpeg', '-f', 'concat', '-safe', '0',
-                        '-i', concat_list,
-                        '-c', 'copy',  # Just copy streams without re-encoding
-                        '-y', output_path
-                    ]
+                    # Instead of concatenating, directly extract frames from the first valid segment
+                    if segment_files:
+                        output_path = segment_files[0]  # Use the first segment directly
+                        logging.info(f"Using first segment as source: {output_path}")
+                    else:
+                        raise ValueError("No valid segments found")
+                        
                 except Exception as hls_err:
                     logging.error(f"HLS processing error for {video_url}: {str(hls_err)}")
-                    raise
+                    # Fall back to capturing thumbnail
+                    # For now, we'll return a default empty list of frames
+                    return []
             else:
                 # Handle direct video URLs (MP4, WebM, etc.)
                 try:
@@ -318,59 +321,57 @@ def extract_video_frames(video_url: str, num_frames: int = 5) -> List[Image.Imag
                         '-c', 'copy',  # Just copy streams without re-encoding
                         '-y', output_path
                     ]
+                    
+                    # Run ffmpeg command
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    if result.returncode != 0:
+                        error_msg = result.stderr.strip() if result.stderr else "Unknown ffmpeg error"
+                        logging.error(f"FFmpeg conversion failed: {error_msg}")
+                        # Fall back to original file
+                        output_path = video_path
                 except requests.RequestException as e:
                     logging.error(f"Failed to download video directly: {str(e)}")
-                    raise
+                    return []
             
-            # Run ffmpeg command with better error handling
+            # Extract frames from the video
+            frames = []
             try:
+                # Use ffmpeg to extract frames
+                frames_dir = os.path.join(temp_dir, "frames")
+                os.makedirs(frames_dir, exist_ok=True)
+                frames_path = os.path.join(frames_dir, "frame_%04d.jpg")
+                
+                # Extract frames command
+                cmd = [
+                    'ffmpeg', '-i', output_path,
+                    '-vf', f'fps=1/{max(1, int(target_duration/num_frames))}',  # Extract frames at regular intervals
+                    '-frames:v', str(num_frames),  # Limit to num_frames
+                    '-y', frames_path
+                ]
+                
                 result = subprocess.run(cmd, capture_output=True, text=True)
                 if result.returncode != 0:
                     error_msg = result.stderr.strip() if result.stderr else "Unknown ffmpeg error"
-                    logging.error(f"FFmpeg command failed: {' '.join(cmd)}")
-                    logging.error(f"FFmpeg error output: {error_msg}")
-                    raise ValueError(f"FFmpeg error: {error_msg}")
+                    logging.error(f"Frame extraction failed: {error_msg}")
+                    return []
                 
-                if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
-                    raise ValueError("FFmpeg output file is missing or empty")
+                # Load extracted frames
+                frame_files = sorted(glob.glob(os.path.join(frames_dir, "frame_*.jpg")))
+                frames = [Image.open(f) for f in frame_files if os.path.exists(f)]
+                
+                if not frames:
+                    logging.warning(f"No frames extracted from {video_url}")
+                    return []
+                
+                return frames
+                
             except Exception as e:
-                logging.error(f"Error running ffmpeg: {str(e)}")
-                raise
-            
-            # Extract frames using OpenCV
-            cap = cv2.VideoCapture(output_path)
-            if not cap.isOpened():
-                raise ValueError("OpenCV failed to open the video file")
+                logging.error(f"Frame extraction error: {str(e)}")
+                return []
                 
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            if total_frames == 0:
-                raise ValueError("No frames found in the video")
-            
-            # Calculate frame indices for key frames
-            frame_indices = np.linspace(0, total_frames-1, num_frames, dtype=int)
-            frames = []
-            
-            for idx in frame_indices:
-                cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-                ret, frame = cap.read()
-                if ret:
-                    # Convert BGR to RGB
-                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    # Convert to PIL Image
-                    pil_image = Image.fromarray(frame_rgb)
-                    frames.append(pil_image)
-            
-            cap.release()
-            
-            if not frames:
-                raise ValueError("No frames successfully extracted")
-            
-            return frames
-            
     except Exception as e:
-        logging.error(f"Error extracting video frames from {video_url}: {str(e)}")
-        # Return None instead of raising to allow fallback to thumbnail
-        return None
+        logging.error(f"Video processing error: {str(e)}")
+        return []
 
 def get_video_embedding(video_url: str) -> np.ndarray:
     """Generate CLIP embedding for a video by combining key frame embeddings"""
