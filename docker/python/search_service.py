@@ -236,141 +236,222 @@ def extract_video_frames(video_url: str, num_frames: int = 5) -> List[Image.Imag
     """Extract key frames from a video URL supporting multiple formats (HLS, MP4, WebM)"""
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
-            output_path = os.path.join(temp_dir, "video.mp4")
+            frames_dir = os.path.join(temp_dir, "frames")
+            os.makedirs(frames_dir, exist_ok=True)
             
-            # Download video file or segments
+            # For HLS streams, use ffmpeg directly with the m3u8 URL
             if video_url.endswith('.m3u8'):
-                # Handle HLS streams
                 try:
+                    logging.info(f"Processing HLS stream: {video_url}")
+                    
+                    # Extract frames directly from the HLS stream
+                    # First try downloading the media segments
                     base_url = get_base_url(video_url)
-                    logging.info(f"Base URL for HLS: {base_url}")
-                    
                     playlist = m3u8.load(video_url)
+                    
+                    # If this is a master playlist, get the highest quality variant
                     if not playlist.segments and playlist.playlists:
-                        # Get highest quality variant
                         playlists = sorted(playlist.playlists, 
-                                        key=lambda p: p.stream_info.resolution[0] if p.stream_info and p.stream_info.resolution else (0, 0), 
-                                        reverse=True)
-                        variant_url = urljoin(base_url, playlists[0].uri)
-                        logging.info(f"Loading variant playlist: {variant_url}")
-                        playlist = m3u8.load(variant_url)
-                        base_url = get_base_url(variant_url)
+                                       key=lambda p: p.stream_info.resolution[0] if p.stream_info and p.stream_info.resolution else (0, 0), 
+                                       reverse=True)
+                        if playlists:
+                            variant_url = urljoin(base_url, playlists[0].uri)
+                            logging.info(f"Using variant playlist: {variant_url}")
+                            playlist = m3u8.load(variant_url)
+                            base_url = get_base_url(variant_url)
                     
-                    if not playlist.segments:
-                        raise ValueError("No segments found in playlist")
+                    # Extract thumbnail image from the segments
+                    if playlist.segments:
+                        logging.info(f"Found {len(playlist.segments)} segments in playlist")
+                        
+                        # Try to get the first few seconds of video
+                        segment_files = []
+                        for i, segment in enumerate(playlist.segments[:3]):  # First 3 segments
+                            segment_url = urljoin(base_url, segment.uri)
+                            segment_path = os.path.join(temp_dir, f"segment_{i}.ts")
+                            
+                            logging.info(f"Downloading segment {i}: {segment_url}")
+                            try:
+                                response = requests.get(segment_url, timeout=10)
+                                response.raise_for_status()
+                                
+                                with open(segment_path, 'wb') as f:
+                                    f.write(response.content)
+                                
+                                if os.path.getsize(segment_path) > 0:
+                                    segment_files.append(segment_path)
+                            except Exception as segment_err:
+                                logging.error(f"Failed to download segment {i}: {str(segment_err)}")
+                        
+                        if segment_files:
+                            # Extract frames from each segment
+                            all_frames = []
+                            for i, segment_path in enumerate(segment_files):
+                                segment_frames_dir = os.path.join(frames_dir, f"segment_{i}")
+                                os.makedirs(segment_frames_dir, exist_ok=True)
+                                segment_frames_path = os.path.join(segment_frames_dir, f"frame_%04d.jpg")
+                                
+                                # Try with different demuxers and formats
+                                extraction_success = False
+                                
+                                # Method 1: Try with mpegts demuxer
+                                cmd = [
+                                    'ffmpeg',
+                                    '-f', 'mpegts',        # Force MPEG-TS format
+                                    '-i', segment_path,    # Input segment file
+                                    '-vf', 'fps=1',        # Extract 1 frame per second
+                                    '-frames:v', '3',      # Get at most 3 frames from this segment
+                                    '-y', segment_frames_path
+                                ]
+                                
+                                logging.info(f"Trying mpegts extraction: {' '.join(cmd)}")
+                                result = subprocess.run(cmd, capture_output=True, text=True)
+                                
+                                if result.returncode == 0:
+                                    extraction_success = True
+                                    logging.info("mpegts extraction succeeded")
+                                else:
+                                    logging.info(f"mpegts extraction failed: {result.stderr}")
+                                    
+                                    # Method 2: Try with h264 codec explicitly
+                                    cmd = [
+                                        'ffmpeg',
+                                        '-i', segment_path,    # Input segment file
+                                        '-c:v', 'h264',        # Force h264 codec
+                                        '-vf', 'fps=1',        # Extract 1 frame per second
+                                        '-frames:v', '3',      # Get at most 3 frames from this segment
+                                        '-y', segment_frames_path
+                                    ]
+                                    
+                                    logging.info(f"Trying h264 extraction: {' '.join(cmd)}")
+                                    result = subprocess.run(cmd, capture_output=True, text=True)
+                                    
+                                    if result.returncode == 0:
+                                        extraction_success = True
+                                        logging.info("h264 extraction succeeded")
+                                    else:
+                                        logging.info(f"h264 extraction failed: {result.stderr}")
+                                        
+                                        # Method 3: Final approach - try extracting a single frame with image2 format
+                                        frame_path = os.path.join(segment_frames_dir, "frame.jpg")
+                                        cmd = [
+                                            'ffmpeg',
+                                            '-i', segment_path,
+                                            '-vframes', '1',
+                                            '-f', 'image2',
+                                            '-y', frame_path
+                                        ]
+                                        
+                                        logging.info(f"Trying single frame extraction: {' '.join(cmd)}")
+                                        result = subprocess.run(cmd, capture_output=True, text=True)
+                                        
+                                        if result.returncode == 0 and os.path.exists(frame_path) and os.path.getsize(frame_path) > 0:
+                                            extraction_success = True
+                                            logging.info("Single frame extraction succeeded")
+                                
+                                # Try to load any frames that were extracted
+                                segment_frame_files = glob.glob(os.path.join(segment_frames_dir, "*.jpg"))
+                                if not segment_frame_files and os.path.exists(os.path.join(segment_frames_dir, "frame.jpg")):
+                                    segment_frame_files = [os.path.join(segment_frames_dir, "frame.jpg")]
+                                
+                                if segment_frame_files:
+                                    for frame_file in segment_frame_files:
+                                        try:
+                                            if os.path.getsize(frame_file) > 0:
+                                                frame = Image.open(frame_file)
+                                                all_frames.append(frame)
+                                        except Exception as img_err:
+                                            logging.error(f"Failed to open frame {frame_file}: {str(img_err)}")
+                            
+                            # Return frames if we found any
+                            if all_frames:
+                                # Limit to the requested number of frames
+                                return all_frames[:num_frames]
                     
-                    # Download initial segments
-                    segment_files = []
-                    total_duration = 0
-                    target_duration = 3  # Get first 3 seconds
+                    # If direct segment extraction fails, try to infer thumbnail URL
+                    thumbnail_url = None
+                    base_name = video_url.rsplit('/', 1)[1].split('.')[0] if '/' in video_url and '.' in video_url.rsplit('/', 1)[1] else ""
+                    base_dir = video_url.rsplit('/', 1)[0] if '/' in video_url else ""
                     
-                    for i, segment in enumerate(playlist.segments):
-                        if total_duration >= target_duration:
-                            break
+                    if base_name and base_dir:
+                        thumbnail_candidates = [
+                            f"{base_dir}/{base_name}.jpg",
+                            f"{base_dir}/{base_name}_preview.jpg",
+                            f"{base_dir}/{base_name}_thumb.jpg",
+                            f"{base_dir}/thumbs/{base_name}.jpg",
+                        ]
                         
-                        # Construct absolute URL for segment
-                        segment_url = urljoin(base_url, segment.uri)
-                        logging.info(f"Downloading segment: {segment_url}")
-                        
-                        segment_path = os.path.join(temp_dir, f"segment_{i}.ts")
-                        response = requests.get(segment_url, timeout=10)
-                        response.raise_for_status()
-                        
-                        with open(segment_path, 'wb') as f:
-                            f.write(response.content)
-                        
-                        # Verify the segment file is not empty
-                        if os.path.getsize(segment_path) == 0:
-                            logging.warning(f"Segment file is empty: {segment_path}")
-                            continue
-                        
-                        segment_files.append(segment_path)
-                        total_duration += segment.duration
+                        for thumb_url in thumbnail_candidates:
+                            try:
+                                logging.info(f"Trying thumbnail URL: {thumb_url}")
+                                response = requests.head(thumb_url, timeout=5)
+                                if response.status_code == 200:
+                                    thumbnail_url = thumb_url
+                                    break
+                            except Exception:
+                                pass
                     
-                    if not segment_files:
-                        raise ValueError("No segments downloaded")
+                    # If we found a thumbnail URL, download and return it
+                    if thumbnail_url:
+                        try:
+                            response = requests.get(thumbnail_url, timeout=10)
+                            response.raise_for_status()
+                            img = Image.open(BytesIO(response.content))
+                            return [img]
+                        except Exception as thumb_err:
+                            logging.error(f"Failed to download thumbnail: {str(thumb_err)}")
                     
-                    # Instead of concatenating, directly extract frames from the first valid segment
-                    if segment_files:
-                        output_path = segment_files[0]  # Use the first segment directly
-                        logging.info(f"Using first segment as source: {output_path}")
-                    else:
-                        raise ValueError("No valid segments found")
-                        
+                    # If we get here, all methods have failed
+                    logging.error("All HLS frame extraction methods failed")
+                    return []
+                    
                 except Exception as hls_err:
-                    logging.error(f"HLS processing error for {video_url}: {str(hls_err)}")
-                    # Fall back to capturing thumbnail
-                    # For now, we'll return a default empty list of frames
+                    logging.error(f"HLS processing error: {str(hls_err)}")
                     return []
             else:
                 # Handle direct video URLs (MP4, WebM, etc.)
                 try:
-                    # Try direct download first
+                    # Download the video
+                    video_path = os.path.join(temp_dir, "video.mp4")
                     response = requests.get(video_url, stream=True, timeout=10)
                     response.raise_for_status()
                     
-                    video_path = os.path.join(temp_dir, "input_video")
                     with open(video_path, 'wb') as f:
                         for chunk in response.iter_content(chunk_size=8192):
                             if chunk:
                                 f.write(chunk)
                     
-                    # Basic conversion command
+                    # Extract frames
+                    frames_path = os.path.join(frames_dir, "frame_%04d.jpg")
                     cmd = [
-                        'ffmpeg', '-i', video_path,
-                        '-c', 'copy',  # Just copy streams without re-encoding
-                        '-y', output_path
+                        'ffmpeg', 
+                        '-i', video_path, 
+                        '-vf', f'fps=1/{max(1, int(10/num_frames))}',  # Extract frames at regular intervals
+                        '-frames:v', str(num_frames),                  # Limit to num_frames
+                        '-y', frames_path
                     ]
                     
-                    # Run ffmpeg command
                     result = subprocess.run(cmd, capture_output=True, text=True)
                     if result.returncode != 0:
                         error_msg = result.stderr.strip() if result.stderr else "Unknown ffmpeg error"
-                        logging.error(f"FFmpeg conversion failed: {error_msg}")
-                        # Fall back to original file
-                        output_path = video_path
-                except requests.RequestException as e:
-                    logging.error(f"Failed to download video directly: {str(e)}")
+                        logging.error(f"Frame extraction failed: {error_msg}")
+                        raise ValueError(f"Failed to extract frames: {error_msg}")
+                    
+                    # Load extracted frames
+                    frame_files = sorted(glob.glob(os.path.join(frames_dir, "frame_*.jpg")))
+                    frames = [Image.open(f) for f in frame_files if os.path.exists(f)]
+                    
+                    if not frames:
+                        raise ValueError("No frames extracted from video")
+                    
+                    return frames
+                    
+                except Exception as e:
+                    logging.error(f"Video processing error: {str(e)}")
                     return []
-            
-            # Extract frames from the video
-            frames = []
-            try:
-                # Use ffmpeg to extract frames
-                frames_dir = os.path.join(temp_dir, "frames")
-                os.makedirs(frames_dir, exist_ok=True)
-                frames_path = os.path.join(frames_dir, "frame_%04d.jpg")
-                
-                # Extract frames command
-                cmd = [
-                    'ffmpeg', '-i', output_path,
-                    '-vf', f'fps=1/{max(1, int(target_duration/num_frames))}',  # Extract frames at regular intervals
-                    '-frames:v', str(num_frames),  # Limit to num_frames
-                    '-y', frames_path
-                ]
-                
-                result = subprocess.run(cmd, capture_output=True, text=True)
-                if result.returncode != 0:
-                    error_msg = result.stderr.strip() if result.stderr else "Unknown ffmpeg error"
-                    logging.error(f"Frame extraction failed: {error_msg}")
-                    return []
-                
-                # Load extracted frames
-                frame_files = sorted(glob.glob(os.path.join(frames_dir, "frame_*.jpg")))
-                frames = [Image.open(f) for f in frame_files if os.path.exists(f)]
-                
-                if not frames:
-                    logging.warning(f"No frames extracted from {video_url}")
-                    return []
-                
-                return frames
-                
-            except Exception as e:
-                logging.error(f"Frame extraction error: {str(e)}")
-                return []
-                
+        
     except Exception as e:
-        logging.error(f"Video processing error: {str(e)}")
+        logging.error(f"Video frame extraction failed: {str(e)}")
         return []
 
 def get_video_embedding(video_url: str) -> np.ndarray:
