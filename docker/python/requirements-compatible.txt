@@ -21,13 +21,15 @@ deepface>=0.0.79  # For emotion analysis
 # If you need TensorFlow functionality, uncomment below
 # tensorflow==2.9.0
 # keras==2.9.0
-m3u8==4.0.0
+
+opencv-python>=4.5.5.64  # For video frame extraction
+m3u8>=3.3.0  # For HLS playlist parsing
 
 # Use specific opencv versions that resolve the DictValue error
-opencv-python==4.5.5.64
-opencv-contrib-python==4.5.5.64
+# opencv-python==4.5.5.64
+# opencv-contrib-python==4.5.5.64
 
-requests==2.31.0
+requests>=2.31.0  # For HTTP requests
 # NOTE: There is a dependency conflict:
 # - tensorboard requires protobuf<3.20
 # - onnx requires protobuf>=3.20.2
