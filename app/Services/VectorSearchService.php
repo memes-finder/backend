@@ -10,7 +10,7 @@ use Phalcon\Logger;
 
 class VectorSearchService extends Injectable
 {
-    private $searchServiceUrl;
+    private string $searchServiceUrl;
     private Client $httpClient;
     private Logger $logger;
     

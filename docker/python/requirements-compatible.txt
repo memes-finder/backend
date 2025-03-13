@@ -2,18 +2,18 @@ flask==2.0.1
 werkzeug==2.0.3
 tashaphyne==0.3.6
 flask-cors==4.0.0
-sentence-transformers==2.2.2
-redis==5.0.1
-numpy==1.24.3
+sentence-transformers>=2.2.2
+redis>=4.5.1
+numpy>=1.23.0,<2.0.0
 # Skip torch as it's pre-installed in the container
 # torch==2.1.0
 huggingface-hub==0.19.4
 faiss-cpu==1.7.4
-ftfy==6.1.1
+ftfy>=6.1.1
 regex==2023.10.3
-Pillow==10.0.0
-transformers==4.36.2
-python-dotenv==1.0.0
+Pillow>=9.5.0
+transformers>=4.37.2
+python-dotenv>=1.0.1
 # Skip tensorflow/keras since they're conflicting and might not be needed for the stemmer
 # If you need TensorFlow functionality, comment out the protobuf pin below
 # tensorflow==2.9.0
@@ -21,7 +21,8 @@ python-dotenv==1.0.0
 # deepface==0.0.79
 m3u8==4.0.0
 # Use opencv-headless to avoid GUI dependencies
-opencv-python-headless==4.8.1.78
+opencv-python==4.5.5.64
+opencv-contrib-python==4.5.5.64
 requests==2.31.0
 # Pin protobuf to a version compatible with tensorboard
-#protobuf>=3.20.2
+protobuf==3.19.6
