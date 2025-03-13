@@ -235,193 +235,241 @@ def get_base_url(url: str) -> str:
 def extract_video_frames(video_url: str, num_frames: int = 5) -> List[Image.Image]:
     """Extract key frames from a video URL supporting multiple formats (HLS, MP4, WebM)"""
     try:
-        # For both HLS streams and direct video URLs, try to use OpenCV directly
-        logging.info(f"Processing video: {video_url} using OpenCV")
+        frames = []
+        extraction_successful = False
         
-        # First check if OpenCV is built with ffmpeg support
-        build_info = cv2.getBuildInformation()
-        if "FFMPEG" in build_info and "YES" in build_info.split("FFMPEG")[1].split("\n")[0]:
-            logging.info("OpenCV is built with FFMPEG support")
-        else:
-            logging.warning("OpenCV may not have FFMPEG support, HLS streams might not work")
-            
-        # Create a VideoCapture object
-        cap = cv2.VideoCapture(video_url)
-        
-        if not cap.isOpened():
-            logging.error(f"Failed to open video URL: {video_url}")
-            
-            # Try fallback methods if it's an HLS stream
-            if video_url.endswith('.m3u8'):
-                return _extract_hls_frames_fallback(video_url, num_frames)
-            else:
-                return []
-        
-        # Get video properties
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        
-        logging.info(f"Video properties: FPS={fps}, Total frames={frame_count}")
-        
-        # For HLS streams, frame_count might be 0 since it's a live stream
-        if frame_count == 0:
-            # Just extract the first few frames
-            frames = []
-            for _ in range(num_frames * 2):  # Try to get more frames than needed in case some fail
-                ret, frame = cap.read()
-                if not ret:
-                    break
-                if len(frames) < num_frames:  # Only keep up to num_frames
-                    # Convert BGR to RGB
-                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    frames.append(Image.fromarray(frame_rgb))
-        else:
-            # Calculate frame indices to extract
-            if frame_count <= num_frames:
-                # If we have fewer frames than requested, use all of them
-                indices = list(range(frame_count))
-            else:
-                # Otherwise, select evenly spaced frames
-                indices = [int(i * (frame_count / num_frames)) for i in range(num_frames)]
-            
-            frames = []
-            for idx in indices:
-                cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-                ret, frame = cap.read()
-                if ret:
-                    # Convert BGR to RGB
-                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    frames.append(Image.fromarray(frame_rgb))
-        
-        cap.release()
-        
-        if not frames:
-            logging.warning(f"No frames extracted from {video_url} using OpenCV")
-            
-            # Try fallback methods if it's an HLS stream
-            if video_url.endswith('.m3u8'):
-                return _extract_hls_frames_fallback(video_url, num_frames)
-            else:
-                return []
-        
-        return frames
-    
-    except Exception as e:
-        logging.error(f"Error extracting video frames: {str(e)}")
-        
-        # Try fallback methods if it's an HLS stream
-        if video_url.endswith('.m3u8'):
-            return _extract_hls_frames_fallback(video_url, num_frames)
-        
-        return []
-
-def _extract_hls_frames_fallback(video_url: str, num_frames: int = 5) -> List[Image.Image]:
-    """Fallback method for extracting frames from HLS streams when OpenCV fails"""
-    logging.info(f"Using fallback method for HLS: {video_url}")
-    
-    try:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            frames_dir = os.path.join(temp_dir, "frames")
-            os.makedirs(frames_dir, exist_ok=True)
-            
-            # Try to get thumbnail URL first as it's faster
-            thumbnail_url = None
-            base_name = video_url.rsplit('/', 1)[1].split('.')[0] if '/' in video_url and '.' in video_url.rsplit('/', 1)[1] else ""
-            base_dir = video_url.rsplit('/', 1)[0] if '/' in video_url else ""
-            
-            if base_name and base_dir:
-                thumbnail_candidates = [
-                    f"{base_dir}/{base_name}.jpg",
-                    f"{base_dir}/{base_name}_preview.jpg",
-                    f"{base_dir}/{base_name}_thumb.jpg",
-                    f"{base_dir}/thumbs/{base_name}.jpg",
-                ]
-                
-                for thumb_url in thumbnail_candidates:
-                    try:
-                        logging.info(f"Trying thumbnail URL: {thumb_url}")
-                        response = requests.head(thumb_url, timeout=5)
-                        if response.status_code == 200:
-                            thumbnail_url = thumb_url
-                            break
-                    except Exception:
-                        pass
-            
-            # If we found a thumbnail URL, download and return it
-            if thumbnail_url:
-                try:
-                    response = requests.get(thumbnail_url, timeout=10)
-                    response.raise_for_status()
-                    img = Image.open(BytesIO(response.content))
-                    frames = [img]
-                    logging.info(f"Successfully loaded thumbnail: {thumbnail_url}")
-                except Exception as thumb_err:
-                    logging.debug(f"Failed to load thumbnail {thumb_url}: {str(thumb_err)}")
-            
-            # If no thumbnail, try direct ffmpeg extraction with specific HLS options
+        # First attempt: try using OpenCV directly
+        if not extraction_successful:
             try:
-                frames_path = os.path.join(frames_dir, "frame_%04d.jpg")
+                logging.info(f"Processing video: {video_url} using OpenCV")
                 
-                # Use ffmpeg with HLS specific options
-                cmd = [
-                    'ffmpeg',
-                    '-protocol_whitelist', 'file,http,https,tcp,tls',  # Allow various protocols
-                    '-i', video_url,                                   # Input HLS URL
-                    '-vf', 'fps=1',                                    # Extract 1 frame per second
-                    '-frames:v', str(num_frames),                      # Limit frames
-                    '-vsync', '0',                                     # Don't try to sync video
-                    '-y', frames_path                                  # Output path
-                ]
+                # Check if OpenCV is built with ffmpeg support
+                build_info = cv2.getBuildInformation()
+                if "FFMPEG" in build_info and "YES" in build_info.split("FFMPEG")[1].split("\n")[0]:
+                    logging.info("OpenCV is built with FFMPEG support")
+                else:
+                    logging.warning("OpenCV may not have FFMPEG support, HLS streams might not work")
                 
-                logging.info(f"Running ffmpeg command: {' '.join(cmd)}")
-                result = subprocess.run(cmd, capture_output=True, text=True)
+                # Create a VideoCapture object
+                cap = cv2.VideoCapture(video_url)
                 
-                if result.returncode == 0:
-                    # Load extracted frames
-                    frame_files = sorted(glob.glob(os.path.join(frames_dir, "*.jpg")))
+                if cap.isOpened():
+                    # Get video properties
+                    fps = cap.get(cv2.CAP_PROP_FPS)
+                    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    
+                    logging.info(f"Video properties: FPS={fps}, Total frames={frame_count}")
+                    
+                    # For streams where frame_count can't be determined or is unreliable
+                    frame_capture_attempts = 0
                     frames = []
-                    for frame_file in frame_files:
-                        try:
-                            if os.path.getsize(frame_file) > 0:
-                                frames.append(Image.open(frame_file))
-                        except Exception as img_err:
-                            logging.error(f"Failed to open frame {frame_file}: {str(img_err)}")
+                    max_attempts = max(30, num_frames * 3)  # Try more frames than needed
+                    
+                    # Just read frames sequentially until we have enough
+                    while len(frames) < num_frames and frame_capture_attempts < max_attempts:
+                        ret, frame = cap.read()
+                        if not ret:
+                            break
+                        
+                        # Only keep frames at regular intervals
+                        if frame_capture_attempts % max(1, int(max_attempts / num_frames)) == 0:
+                            # Convert BGR to RGB
+                            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                            frames.append(Image.fromarray(frame_rgb))
+                        
+                        frame_capture_attempts += 1
+                    
+                    cap.release()
                     
                     if frames:
-                        return frames
-            except Exception as ffmpeg_err:
-                logging.error(f"Direct ffmpeg extraction failed: {str(ffmpeg_err)}")
-            
-            # Final fallback: try to download and process the first segment directly
-            try:
-                base_url = get_base_url(video_url)
-                playlist = m3u8.load(video_url)
-                
-                # If this is a master playlist, get the highest quality variant
-                if not playlist.segments and playlist.playlists:
-                    playlists = sorted(playlist.playlists,
-                                    key=lambda p: p.stream_info.resolution[0] if p.stream_info and p.stream_info.resolution else (0, 0),
-                                    reverse=True)
-                    if playlists:
-                        variant_url = urljoin(base_url, playlists[0].uri)
-                        logging.info(f"Using variant playlist: {variant_url}")
-                        playlist = m3u8.load(variant_url)
-                        base_url = get_base_url(variant_url)
-                
-                # Extract thumbnail image from the segments
-                if playlist.segments:
-                    segment = playlist.segments[0]
-                    segment_url = urljoin(base_url, segment.uri)
-                    
-                    # Just return the zero vector to allow the service to continue
-                    logging.warning(f"All HLS extraction methods failed for {video_url}")
-                    return []
+                        logging.info(f"Successfully extracted {len(frames)} frames using OpenCV")
+                        extraction_successful = True
+                    else:
+                        logging.warning(f"No frames extracted from {video_url} using OpenCV sequential reading")
+                else:
+                    logging.error(f"Failed to open video URL with OpenCV: {video_url}")
             except Exception as e:
-                logging.error(f"Failed to process HLS playlist: {str(e)}")
-            
-            return []
+                logging.error(f"OpenCV extraction error: {str(e)}")
+        
+        # Second attempt: Use ffmpeg directly for HLS
+        if not extraction_successful and video_url.endswith('.m3u8'):
+            try:
+                logging.info(f"Attempting direct ffmpeg extraction for: {video_url}")
+                
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    frames_dir = os.path.join(temp_dir, "frames")
+                    os.makedirs(frames_dir, exist_ok=True)
+                    frames_path = os.path.join(frames_dir, "frame_%04d.jpg")
+                    
+                    # Try with very relaxed settings to handle corrupted streams
+                    cmd = [
+                        'ffmpeg',
+                        '-protocol_whitelist', 'file,http,https,tcp,tls',
+                        '-i', video_url,
+                        '-vf', 'fps=1',
+                        '-frames:v', str(num_frames),
+                        '-vsync', '0',  # Don't sync video - good for corrupted files
+                        '-err_detect', 'ignore_err',  # Ignore decoding errors
+                        '-fflags', '+genpts+igndts+discardcorrupt',  # Handle corrupt data
+                        '-y', frames_path
+                    ]
+                    
+                    logging.info(f"Running ffmpeg command: {' '.join(cmd)}")
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    
+                    # Check if frames were generated
+                    frame_files = sorted(glob.glob(os.path.join(frames_dir, "*.jpg")))
+                    if frame_files:
+                        frames = []
+                        for frame_file in frame_files:
+                            try:
+                                if os.path.exists(frame_file) and os.path.getsize(frame_file) > 0:
+                                    frames.append(Image.open(frame_file))
+                            except Exception as img_err:
+                                logging.error(f"Failed to open frame file: {str(img_err)}")
+                        
+                        if frames:
+                            logging.info(f"Successfully extracted {len(frames)} frames using direct ffmpeg")
+                            extraction_successful = True
+                        else:
+                            logging.warning("No valid frames found using direct ffmpeg extraction")
+                    else:
+                        logging.warning("No frame files generated by ffmpeg")
+            except Exception as e:
+                logging.error(f"Direct ffmpeg extraction error: {str(e)}")
+        
+        # Third attempt: Try to get thumbnails
+        if not extraction_successful and video_url.endswith('.m3u8'):
+            try:
+                logging.info(f"Attempting to find thumbnails for: {video_url}")
+                
+                # Try to infer thumbnail URL
+                thumbnail_url = None
+                base_name = video_url.rsplit('/', 1)[1].split('.')[0] if '/' in video_url and '.' in video_url.rsplit('/', 1)[1] else ""
+                base_dir = video_url.rsplit('/', 1)[0] if '/' in video_url else ""
+                
+                if base_name and base_dir:
+                    # Create variations of possible thumbnail paths
+                    thumbnail_candidates = [
+                        f"{base_dir}/{base_name}.jpg",
+                        f"{base_dir}/{base_name}_preview.jpg",
+                        f"{base_dir}/{base_name}_thumb.jpg",
+                        f"{base_dir}/thumbs/{base_name}.jpg",
+                        # Try with different parent directory
+                        f"{base_dir.rsplit('/', 1)[0]}/thumbnails/{base_name}.jpg",
+                        # Try with video ID only
+                        f"{base_dir.rsplit('/', 1)[0]}/thumbnails/{base_dir.rsplit('/', 1)[1]}.jpg",
+                    ]
+                    
+                    for thumb_url in thumbnail_candidates:
+                        try:
+                            logging.info(f"Trying thumbnail URL: {thumb_url}")
+                            response = requests.head(thumb_url, timeout=5)
+                            if response.status_code == 200:
+                                thumbnail_url = thumb_url
+                                break
+                        except Exception:
+                            pass
+                
+                # If we found a thumbnail URL, download and use it
+                if thumbnail_url:
+                    try:
+                        response = requests.get(thumbnail_url, timeout=10)
+                        response.raise_for_status()
+                        img = Image.open(BytesIO(response.content))
+                        frames = [img]
+                        logging.info(f"Successfully loaded thumbnail: {thumbnail_url}")
+                        extraction_successful = True
+                    except Exception as thumb_err:
+                        logging.error(f"Failed to download thumbnail: {str(thumb_err)}")
+            except Exception as e:
+                logging.error(f"Thumbnail extraction error: {str(e)}")
+        
+        # Final attempt: Try to use the HLS segments directly
+        if not extraction_successful and video_url.endswith('.m3u8'):
+            try:
+                logging.info(f"Attempting to extract from HLS segments for: {video_url}")
+                
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    # Download and process segments
+                    base_url = get_base_url(video_url)
+                    playlist = m3u8.load(video_url)
+                    
+                    # Handle master playlists
+                    if not playlist.segments and playlist.playlists:
+                        playlists = sorted(playlist.playlists,
+                                       key=lambda p: p.stream_info.resolution[0] if p.stream_info and p.stream_info.resolution else (0, 0),
+                                       reverse=True)
+                        if playlists:
+                            variant_url = urljoin(base_url, playlists[0].uri)
+                            logging.info(f"Using variant playlist: {variant_url}")
+                            playlist = m3u8.load(variant_url)
+                            base_url = get_base_url(variant_url)
+                    
+                    # Process segments
+                    if playlist.segments:
+                        logging.info(f"Found {len(playlist.segments)} segments in playlist")
+                        
+                        for i, segment in enumerate(playlist.segments[:2]):  # Just try first two segments
+                            segment_url = urljoin(base_url, segment.uri)
+                            segment_path = os.path.join(temp_dir, f"segment_{i}.ts")
+                            
+                            try:
+                                # Download segment
+                                logging.info(f"Downloading segment {i}: {segment_url}")
+                                response = requests.get(segment_url, timeout=10)
+                                response.raise_for_status()
+                                
+                                with open(segment_path, 'wb') as f:
+                                    f.write(response.content)
+                                
+                                if os.path.getsize(segment_path) > 0:
+                                    # Extract frame from segment
+                                    frames_dir = os.path.join(temp_dir, f"segment_{i}_frames")
+                                    os.makedirs(frames_dir, exist_ok=True)
+                                    frame_path = os.path.join(frames_dir, "frame.jpg")
+                                    
+                                    cmd = [
+                                        'ffmpeg',
+                                        '-f', 'mpegts',        # Force MPEG-TS format
+                                        '-i', segment_path,    # Input segment file
+                                        '-vframes', '1',       # Just get one frame
+                                        '-an',                 # No audio
+                                        '-y', frame_path
+                                    ]
+                                    
+                                    logging.info(f"Extracting frame from segment: {' '.join(cmd)}")
+                                    result = subprocess.run(cmd, capture_output=True, text=True)
+                                    
+                                    # Check if frame was generated
+                                    if os.path.exists(frame_path) and os.path.getsize(frame_path) > 0:
+                                        try:
+                                            frame = Image.open(frame_path)
+                                            frames.append(frame)
+                                            logging.info(f"Successfully extracted frame from segment {i}")
+                                            if len(frames) >= num_frames:
+                                                break
+                                        except Exception as img_err:
+                                            logging.error(f"Failed to open frame from segment {i}: {str(img_err)}")
+                            except Exception as segment_err:
+                                logging.error(f"Failed to process segment {i}: {str(segment_err)}")
+                        
+                        if frames:
+                            logging.info(f"Successfully extracted {len(frames)} frames from HLS segments")
+                            extraction_successful = True
+            except Exception as e:
+                logging.error(f"HLS segment extraction error: {str(e)}")
+        
+        # If we have frames, return them
+        if frames:
+            return frames[:num_frames]  # Only return up to num_frames
+        
+        # If all methods failed, log the error and return empty list
+        logging.error(f"All frame extraction methods failed for: {video_url}")
+        return []
+        
     except Exception as e:
-        logging.error(f"Fallback HLS extraction failed: {str(e)}")
+        logging.error(f"Video frame extraction failed: {str(e)}")
         return []
 
 def get_video_embedding(video_url: str) -> np.ndarray:
