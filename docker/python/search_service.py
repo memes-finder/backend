@@ -1,5 +1,5 @@
 import torch
-from transformers import AutoModel, AutoTokenizer, AutoProcessor
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor, LlavaForConditionalGeneration
 from sentence_transformers import SentenceTransformer
 import numpy as np
 from PIL import Image
@@ -36,7 +36,7 @@ CACHE_TTL = config.CACHE_TTL
 class MultimodalEncoder:
     def __init__(self):
         # Initialize LLaVA for visual understanding (better than CLIP for Arabic)
-        self.llava_model = AutoModel.from_pretrained(config.LLAVA_MODEL, trust_remote_code=True)
+        self.llava_model = LlavaForConditionalGeneration.from_pretrained(config.LLAVA_MODEL, trust_remote_code=True)
         self.llava_processor = AutoProcessor.from_pretrained(config.LLAVA_MODEL)
         
         # Initialize Arabic-supported text encoder (multilingual E5)
