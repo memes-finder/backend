@@ -155,7 +155,6 @@ def init_redis():
         port=config.REDIS_PORT, 
         db=config.REDIS_SEARCH_DB,
         password=config.REDIS_PASSWORD,
-        ssl=config.REDIS_SSL,
         decode_responses=False
     )
     
@@ -213,7 +212,6 @@ redis_pool = redis.ConnectionPool(
     port=config.REDIS_PORT, 
     db=config.REDIS_SEARCH_DB,
     password=config.REDIS_PASSWORD,
-    ssl=config.REDIS_SSL,
     decode_responses=False,
     max_connections=config.REDIS_MAX_CONNECTIONS
 )
