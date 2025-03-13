@@ -120,7 +120,7 @@ def init_redis():
     client = redis.Redis(
         host=config.REDIS_HOST, 
         port=config.REDIS_PORT, 
-        db=config.REDIS_DB,
+        db=config.REDIS_SEARCH_DB,
         password=config.REDIS_PASSWORD,
         ssl=config.REDIS_SSL,
         decode_responses=False
@@ -191,7 +191,7 @@ logging.info(f"Models converted to float16 on {device}")
 redis_pool = redis.ConnectionPool(
     host=config.REDIS_HOST, 
     port=config.REDIS_PORT, 
-    db=config.REDIS_DB,
+    db=config.REDIS_SEARCH_DB,
     password=config.REDIS_PASSWORD,
     ssl=config.REDIS_SSL,
     decode_responses=False,

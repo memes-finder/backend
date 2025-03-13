@@ -33,7 +33,7 @@ if device == 'cuda':
 redis_client = redis.Redis(
     host=config.REDIS_HOST, 
     port=config.REDIS_PORT, 
-    db=config.REDIS_DB,
+    db=config.REDIS_SEARCH_DB,
     password=config.REDIS_PASSWORD,
     ssl=config.REDIS_SSL,
     decode_responses=False

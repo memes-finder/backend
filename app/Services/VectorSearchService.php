@@ -10,16 +10,21 @@ use Phalcon\Logger;
 
 class VectorSearchService extends Injectable
 {
-    private const SEARCH_SERVICE_URL = 'http://search:5051';
-    
+    private $searchServiceUrl;
     private Client $httpClient;
     private Logger $logger;
     
     public function __construct()
     {
         $this->logger = $this->getDI()->getLogger();
+        
+        // Get search service URL from environment or use default
+        $searchHost = getenv('SEARCH_HOST') ?: 'search';
+        $searchPort = getenv('SEARCH_PORT') ?: '5051';
+        $this->searchServiceUrl = "{$searchHost}:{$searchPort}";
+        
         $this->httpClient = new Client([
-            'base_uri' => self::SEARCH_SERVICE_URL,
+            'base_uri' => $this->searchServiceUrl,
             'timeout' => 30,
         ]);
     }

@@ -7,7 +7,7 @@ from redis.commands.search.field import VectorField, TagField, TextField
 from typing import Dict, List, Optional
 
 from config import (
-    REDIS_HOST, REDIS_PORT, REDIS_DB, EMBEDDING_DIM,
+    REDIS_HOST, REDIS_PORT, REDIS_SEARCH_DB, EMBEDDING_DIM,
     REDIS_INDEX_NAME, DEFAULT_SEARCH_LIMIT,
     VECTOR_SCORE_WEIGHT, EMOTION_SCORE_WEIGHT
 )
@@ -20,7 +20,7 @@ class RedisClient:
         self.client = redis.Redis(
             host=REDIS_HOST,
             port=REDIS_PORT,
-            db=REDIS_DB
+            db=REDIS_SEARCH_DB
         )
         self._create_search_index()
     

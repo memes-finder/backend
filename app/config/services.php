@@ -176,7 +176,7 @@ $di->setShared('redisSuggest', function () {
 });
 
 $di->setShared('rateLimiter', function () {
-    return $this->getCache($_ENV['REDIS_INDEX'])['instance'];
+    return $this->getCache($_ENV['REDIS_DB'])['instance'];
 });
 
 // Register the search service

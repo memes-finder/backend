@@ -8,13 +8,19 @@ use GuzzleHttp\Exception\GuzzleException;
 
 class ArabicStemmerService extends Injectable
 {
-    private const STEMMER_URL = 'http://host.docker.internal:5050/stem';
+    private $stemmerUrl;
     private $httpClient;
     private $logger;
 
     public function __construct()
     {
         $this->logger = $this->getDI()->getLogger();
+        
+        // Get stemmer URL from environment or use default
+        $stemmerHost = getenv('STEMMER_HOST') ?: 'host.docker.internal';
+        $stemmerPort = getenv('STEMMER_PORT') ?: '5050';
+        $this->stemmerUrl = "{$stemmerHost}:{$stemmerPort}/stem";
+        
         $this->httpClient = new Client([
             'timeout' => 5.0,
             'connect_timeout' => 2.0
@@ -30,7 +36,7 @@ class ArabicStemmerService extends Injectable
     public function stemWord(string $word): string
     {
         try {
-            $response = $this->httpClient->post(self::STEMMER_URL, [
+            $response = $this->httpClient->post($this->stemmerUrl, [
                 'json' => ['text' => $word],
                 'headers' => ['Content-Type' => 'application/json']
             ]);
