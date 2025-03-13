@@ -27,5 +27,8 @@ opencv-python==4.5.5.64
 opencv-contrib-python==4.5.5.64
 
 requests==2.31.0
-# Pin protobuf to a version compatible with tensorboard
-protobuf>=3.9.2,<3.20
+# NOTE: There is a dependency conflict:
+# - tensorboard requires protobuf<3.20
+# - onnx requires protobuf>=3.20.2
+# You may need to choose which is more important for your application
+protobuf==3.19.6  # Compatible with tensorboard, may cause onnx warnings
