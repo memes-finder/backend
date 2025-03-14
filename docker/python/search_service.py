@@ -683,9 +683,16 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 def batch_index_tags(meme_tags: List[Dict[str, Union[int, str, List[str]]]]):
     """Batch index tags for multiple memes in the stemmer service"""
     try:
+        # Use config/env vars for stemmer service
+        server_host = os.getenv('SERVER_HOST', config.SERVER_HOST)
+        stemmer_port = os.getenv('STEMMER_PORT', config.STEMMER_PORT)
+        stemmer_url = f'http://{server_host}:{stemmer_port}/batch-index-tags'
+        
+        logging.info(f"Connecting to stemmer for batch indexing at {stemmer_url}")
+        
         # Group all tags by meme_id
         response = requests.post(
-            'http://host.docker.internal:5050/batch-index-tags',
+            stemmer_url,
             json={'meme_tags': meme_tags}
         )
         if response.status_code != 200:
@@ -1184,17 +1191,31 @@ def text_search():
         filters = data.get('filters', {})
         limit = data.get('limit', 10)
         meme_type = filters.get('meme_type')
-
         # Get text embeddings for query
         query_embedding = None
         if query:
-            response = requests.post(
-                'http://host.docker.internal:5050/batch-embeddings',
-                json={'texts': [query]}
-            )
-            embeddings = response.json().get('embeddings', [])
-            if embeddings:
-                query_embedding = np.array(embeddings[0], dtype=np.float32)
+            try:
+                server_host = os.getenv('SERVER_HOST', config.SERVER_HOST)
+                stemmer_port = os.getenv('STEMMER_PORT', config.STEMMER_PORT)
+                stemmer_url = f'http://{server_host}:{stemmer_port}/batch-embeddings'
+                
+                logging.info(f"Connecting to stemmer at {stemmer_url}")
+                response = requests.post(
+                    stemmer_url,
+                    json={'texts': [query]}
+                )
+                embeddings = response.json().get('embeddings', [])
+                if embeddings:
+                    query_embedding = np.array(embeddings[0], dtype=np.float32)
+            except Exception as e:
+                logging.error(f"Failed to get embeddings from stemmer: {str(e)}")
+                # Fallback to local text encoding
+                logging.info("Falling back to local text encoding")
+                query_embedding = encoder.text_encoder.encode(
+                    query,
+                    convert_to_tensor=True,
+                    normalize_embeddings=True
+                ).cpu().numpy()
 
         # Search Redis for matching memes
         results = []

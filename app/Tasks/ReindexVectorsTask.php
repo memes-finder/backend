@@ -46,6 +46,7 @@ class ReindexVectorsTask extends Task
             
             // Process batch
             $batchData = [];
+            $processedIds = [];
             foreach ($memes as $meme) {
                 // Get tags in both languages
                 $englishTags = array_column($meme->getTagsByLanguage('english')->toArray(), 'tag');
@@ -61,6 +62,9 @@ class ReindexVectorsTask extends Task
                     'caption' => $meme->caption ?? '',
                     'meme_type' => $meme->meme_type
                 ];
+                
+                // Store ID for logging
+                $processedIds[] = $meme->id;
                 
                 // Mark as indexed
                 $meme->embedding_status = 'indexed';
@@ -84,6 +88,7 @@ class ReindexVectorsTask extends Task
             $duration = round($endTime - $startTime, 2);
             
             echo "Processed " . count($batchData) . " memes in {$duration}s. {$remainingCount} remaining.\n";
+            echo "Processed meme IDs: " . implode(", ", $processedIds) . "\n";
         }
         
         echo "All memes processed.\n";
