@@ -51,6 +51,7 @@ from deepface import DeepFace
 import json
 import config
 import glob
+import datetime
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO, 
@@ -583,58 +584,81 @@ def get_video_embedding(video_url: str) -> np.ndarray:
         return zero_embedding
 
 def get_image_embedding(image_url: str) -> np.ndarray:
-    """Generate CLIP embedding for an image with caching"""
-    cache_key = f"clip_embedding:{image_url}"
-    cached = redis_client.get(cache_key)
-    
-    if cached:
-        return np.frombuffer(cached, dtype=np.float32)
-    
+    """Get CLIP image embedding for an image URL"""
     try:
-        # Download and process image
-        response = requests.get(image_url, timeout=10)
-        response.raise_for_status()  # Raise error for bad status codes
+        # Check if we have a cached embedding
+        cache_key = f"cache:image_embedding:{hashlib.md5(image_url.encode()).hexdigest()}"
+        cached = redis_client.get(cache_key)
+        if cached:
+            # Parse cached embedding
+            try:
+                embedding = np.frombuffer(cached, dtype=np.float32)
+                if embedding.shape[0] == config.CLIP_EMBEDDING_DIM:
+                    logging.info(f"Using cached image embedding for {image_url}")
+                    return embedding
+                else:
+                    logging.warning(f"Cached image embedding has wrong dimensions: {embedding.shape[0]}, regenerating")
+            except Exception as cache_error:
+                logging.error(f"Error parsing cached image embedding: {str(cache_error)}")
+                # Continue to regenerate the embedding
         
-        # Check content type
-        content_type = response.headers.get('content-type', '').lower()
-        if not any(t in content_type for t in ['image/', 'video/']):
-            raise ValueError(f"Invalid content type: {content_type}")
+        # Download image
+        logging.info(f"Downloading image from {image_url}")
+        local_path = cached_download(image_url)
+        
+        # Open image
+        if not local_path or not os.path.exists(local_path):
+            logging.error(f"Failed to download image from {image_url}")
+            return None
             
         try:
-            image = Image.open(BytesIO(response.content))
+            img = Image.open(local_path).convert('RGB')
         except Exception as e:
-            logging.error(f"Failed to open image from {image_url}: {str(e)}")
-            logging.error(f"Content type: {content_type}")
-            logging.error(f"Content length: {len(response.content)} bytes")
-            raise ValueError(f"Cannot open image: {str(e)}")
-            
-        # Convert to RGB if necessary
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
-            
-        image_input = encoder.image_processor(images=image, return_tensors="pt").to(device)
+            logging.error(f"Failed to open image {local_path}: {str(e)}")
+            return None
         
-        # Ensure input is float32
-        image_input = image_input.float()
-        
+        # Generate embedding
         with torch.no_grad():
-            image_features = encoder.image_model.get_image_features(**image_input)
-            # Ensure output is float32
-            image_features = image_features.float()
-            image_features /= image_features.norm(dim=-1, keepdim=True)
-            embedding_np = image_features.cpu().numpy().astype(np.float32)
-            
-        # Cache the embedding
-        redis_client.set(cache_key, embedding_np.tobytes(), ex=CACHE_TTL)
-        
-        return embedding_np
-        
-    except requests.RequestException as e:
-        logging.error(f"Error downloading image from {image_url}: {str(e)}")
-        raise ValueError(f"Failed to download image: {str(e)}")
+            try:
+                # Preprocess image
+                image_input = encoder.clip_processor(images=img, return_tensors="pt")["pixel_values"].to(encoder.device)
+                
+                # Generate embedding
+                embedding = encoder.clip_model.get_image_features(image_input)
+                
+                # Convert to numpy array
+                embedding = embedding.cpu().numpy().flatten()
+                
+                # Ensure embedding has the correct dimensions
+                if embedding.shape[0] != config.CLIP_EMBEDDING_DIM:
+                    logging.warning(f"Image embedding dimension mismatch: got {embedding.shape[0]}, expected {config.CLIP_EMBEDDING_DIM}")
+                    
+                    # Always ensure embedding is 1D before resizing
+                    if len(embedding.shape) > 1:
+                        embedding = embedding.flatten()
+                    
+                    # Resize embedding to match expected dimensions
+                    if embedding.shape[0] < config.CLIP_EMBEDDING_DIM:
+                        # Pad with zeros if smaller
+                        padding = np.zeros(config.CLIP_EMBEDDING_DIM - embedding.shape[0], dtype=np.float32)
+                        embedding = np.concatenate([embedding, padding])
+                    else:
+                        # Truncate if larger
+                        embedding = embedding[:config.CLIP_EMBEDDING_DIM]
+                
+                # Normalize embedding
+                embedding = embedding / np.linalg.norm(embedding)
+                
+                # Cache embedding
+                redis_client.set(cache_key, embedding.tobytes())
+                
+                return embedding
+            except Exception as e:
+                logging.error(f"Failed to generate image embedding: {str(e)}")
+                return None
     except Exception as e:
-        logging.error(f"Error generating image embedding for {image_url}: {str(e)}")
-        raise
+        logging.error(f"Failed to generate image embedding for {image_url}: {str(e)}")
+        return None
 
 def get_text_embedding(text: str) -> np.ndarray:
     """Generate text embedding with caching"""
@@ -1117,7 +1141,7 @@ def batch_index_memes():
                     'tags': json.dumps(tags),
                     'caption': caption,
                     'text_content': text_content,
-                    'indexed_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    'indexed_at': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 }
                 
                 # Add emotions field (empty JSON object) if not present
