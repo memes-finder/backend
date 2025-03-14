@@ -707,28 +707,92 @@ def normalize_arabic(text: str) -> str:
     text = text.replace('ؤ', 'و')
     return text
 
-def text_similarity(query: str, text: str) -> float:
-    """Calculate text similarity score considering Arabic text variations"""
-    # Normalize both texts
-    norm_query = normalize_arabic(query.lower())
-    norm_text = normalize_arabic(text.lower())
+def text_similarity(text1, text2):
+    """Calculate text similarity between two strings"""
+    if not text1 or not text2:
+        return 0.0
     
-    # Check for exact matches first
-    if norm_query in norm_text or norm_text in norm_query:
+    # Normalize texts
+    text1 = text1.lower().strip()
+    text2 = text2.lower().strip()
+    
+    # Check for exact matches first (higher weight for Arabic)
+    if text1 == text2:
         return 1.0
-        
-    # Check for word-level matches
-    query_words = set(norm_query.split())
-    text_words = set(norm_text.split())
     
-    # Calculate word overlap
-    common_words = query_words & text_words
-    if common_words:
-        # Higher weight for more word matches
-        word_match_ratio = len(common_words) / len(query_words)  # Focus on query words matched
-        return min(0.7 + (word_match_ratio * 0.3), 1.0)  # Base score + word match bonus
+    # Arabic-specific handling - check if either text contains Arabic characters
+    has_arabic_1 = any(is_arabic_char(c) for c in text1)
+    has_arabic_2 = any(is_arabic_char(c) for c in text2)
+    
+    # If one is Arabic and the other isn't, split into words and check for translations
+    if has_arabic_1 != has_arabic_2:
+        words1 = text1.split()
+        words2 = text2.split()
         
-    return 0.0
+        # Check for any word-level exact matches
+        for w1 in words1:
+            for w2 in words2:
+                if w1 == w2 or w1 in w2 or w2 in w1:
+                    return 0.9  # Almost perfect match if we find a direct word match
+        
+        # If both texts have multiple words, try more partial matching
+        if len(words1) > 1 and len(words2) > 1:
+            word_matches = 0
+            for w1 in words1:
+                for w2 in words2:
+                    # Check for partial word matches (min 3 chars to avoid coincidental matches)
+                    if len(w1) >= 3 and len(w2) >= 3 and (w1[:3] in w2 or w2[:3] in w1):
+                        word_matches += 1
+                        break
+            
+            if word_matches > 0:
+                return min(0.8, 0.5 + (word_matches / max(len(words1), len(words2)) * 0.5))
+    
+    # Check for direct substring matches (very important for Arabic search)
+    if text1 in text2 or text2 in text1:
+        return 0.95
+    
+    # For Arabic text, prioritize character-level matching
+    if has_arabic_1 and has_arabic_2:
+        # Calculate character overlap ratio
+        common_chars = set(text1) & set(text2)
+        total_chars = set(text1) | set(text2)
+        char_similarity = len(common_chars) / max(1, len(total_chars))
+        
+        # Calculate word-level similarity for Arabic
+        words1 = text1.split()
+        words2 = text2.split()
+        
+        word_matches = 0
+        for w1 in words1:
+            for w2 in words2:
+                # For Arabic, even partial matches are significant
+                if len(w1) >= 2 and len(w2) >= 2:
+                    if w1[:2] in w2 or w2[:2] in w1:
+                        word_matches += 1
+                        break
+        
+        word_similarity = word_matches / max(1, max(len(words1), len(words2)))
+        
+        # Combine with higher weight to character-level for Arabic
+        return max(char_similarity * 0.4 + word_similarity * 0.6, 0.7 if text1[:2] in text2 or text2[:2] in text1 else 0)
+    
+    # For non-Arabic text, use standard similarity calculation
+    # Calculate Jaccard similarity for word sets
+    words1 = set(text1.split())
+    words2 = set(text2.split())
+    
+    intersection = words1.intersection(words2)
+    union = words1.union(words2)
+    
+    if not union:
+        return 0.0
+    
+    return len(intersection) / len(union)
+
+def is_arabic_char(char):
+    """Check if a character is Arabic"""
+    return '\u0600' <= char <= '\u06FF' or '\u0750' <= char <= '\u077F' or '\u08A0' <= char <= '\u08FF'
 
 def index_meme(meme_id: str, content_url: str, meme_type: str, text_content: str = "") -> bool:
     """Index a meme in Redis with vector search"""
@@ -1091,109 +1155,6 @@ def batch_index_memes():
         logging.error(f"Error in batch index memes: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/search_by_text', methods=['POST'])
-def search_by_text():
-    """Search for memes using text query"""
-    try:
-        data = request.get_json()
-        if not data or 'query' not in data:
-            return jsonify({'error': 'Missing query'}), 400
-
-        query = data['query']
-        limit = int(data.get('limit', 10))
-        
-        logging.info(f"Searching for query: {query}")
-
-        # Generate query embedding
-        try:
-            query_embedding = get_text_embedding(query)
-            logging.info(f"Generated query embedding with shape: {query_embedding.shape}")
-            logging.info(f"Query embedding norm: {np.linalg.norm(query_embedding)}")
-        except Exception as e:
-            logging.error(f"Error generating query embedding: {str(e)}")
-            return jsonify({
-                'status': 'error',
-                'message': f"Error generating query embedding: {str(e)}"
-            }), 500
-
-        try:
-            # Execute search using ft() method
-            search_index = redis_client.ft('idx:meme')
-            
-            # List all keys in Redis for debugging
-            all_keys = redis_client.keys('meme:*')
-            logging.info(f"Found {len(all_keys)} meme keys in Redis")
-            
-            # Build query string that matches all documents
-            query_string = '*'
-            
-            # Execute search
-            results = search_index.search(query_string)
-            logging.info(f"Search returned {len(results.docs)} documents")
-            
-            # Process results
-            meme_results = []
-            for doc in results.docs:
-                try:
-                    # Get meme data from Redis hash
-                    meme_key = f"meme:{doc.id.split(':')[1]}"
-                    meme_data = redis_client.hgetall(meme_key)
-                    
-                    logging.info(f"Processing meme {meme_key}")
-                    logging.info(f"Meme data keys: {list(meme_data.keys())}")
-                    
-                    if not meme_data:
-                        logging.warning(f"No data found for meme {meme_key}")
-                        continue
-                        
-                    if b'text_vector' not in meme_data:
-                        logging.warning(f"No text vector found for meme {meme_key}")
-                        continue
-                        
-                    # Calculate vector similarity score
-                    doc_vector = np.frombuffer(meme_data[b'text_vector'], dtype=np.float32)
-                    logging.info(f"Loaded document vector with shape: {doc_vector.shape}")
-                    logging.info(f"Document vector norm: {np.linalg.norm(doc_vector)}")
-                    
-                    score = cosine_similarity(query_embedding, doc_vector)
-                    logging.info(f"Calculated similarity score: {score}")
-                    
-                    if not np.isnan(score) and not np.isinf(score):
-                        meme_id = doc.id.split(':')[1]  # Remove 'meme:' prefix
-                        meme_results.append({
-                            'id': int(meme_id),
-                            'score': float(score)
-                        })
-                except (ValueError, IndexError, AttributeError) as e:
-                    logging.warning(f"Error processing result doc {doc.id}: {str(e)}")
-                    continue
-            
-            logging.info(f"Found {len(meme_results)} valid results")
-            
-            # Sort by score
-            meme_results.sort(key=lambda x: x['score'], reverse=True)
-            
-            # Limit results
-            meme_results = meme_results[:limit]
-            
-            logging.info(f"Returning {len(meme_results)} results")
-
-            return jsonify({
-                'status': 'success',
-                'results': meme_results
-            })
-
-        except Exception as e:
-            logging.error(f"Redis search error: {str(e)}")
-            return jsonify({
-                'status': 'error',
-                'message': f"Search execution error: {str(e)}"
-            }), 500
-
-    except Exception as e:
-        logging.error(f"Search error: {str(e)}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
 @app.route('/text_search', methods=['POST'])
 def text_search():
     """Search for memes using text query and return scores"""
@@ -1202,10 +1163,15 @@ def text_search():
         if not data or 'query' not in data:
             return jsonify({'error': 'No query provided'}), 400
 
-        query = data['query']
+        query = data['query'].strip()
         filters = data.get('filters', {})
         limit = data.get('limit', 10)
         meme_type = filters.get('meme_type')
+        
+        # Check if query has Arabic characters
+        has_arabic = any(is_arabic_char(c) for c in query)
+        logging.info(f"Searching for query: '{query}' (has_arabic: {has_arabic})")
+        
         # Get text embeddings for query
         query_embedding = None
         if query:
@@ -1253,9 +1219,13 @@ def text_search():
 
         # Search Redis for matching memes
         results = []
-        if query_embedding is not None:
+        if query:
             # Get all meme keys
-            meme_keys = redis_client.keys('meme:*')
+            meme_keys = redis_client.keys("meme:*")
+            logging.info(f"Found {len(meme_keys)} total meme keys to search")
+            
+            # Normalize query for text matching
+            normalized_query = normalize_arabic(query.lower())
             
             for meme_key in meme_keys:
                 try:
@@ -1267,92 +1237,173 @@ def text_search():
                     if meme_type and meme_data.get(b'meme_type', b'').decode() != meme_type:
                         continue
 
-                    # Get text vector and calculate semantic similarity
-                    if b'text_vector' not in meme_data:
-                        continue
-                        
-                    text_vector = np.frombuffer(meme_data[b'text_vector'], dtype=np.float32)
+                    # Get tags and caption
+                    tags_json = meme_data.get(b'tags', b'[]').decode()
+                    try:
+                        tags = json.loads(tags_json)
+                        # Handle both array and object formats for tags
+                        if isinstance(tags, dict):
+                            all_tags = []
+                            for tag_list in tags.values():
+                                if isinstance(tag_list, list):
+                                    all_tags.extend(tag_list)
+                            tags = all_tags
+                    except:
+                        tags = []
                     
-                    # Handle dimension mismatch between query and stored vectors
-                    if text_vector.shape[0] != query_embedding.shape[0]:
-                        logging.warning(f"Dimension mismatch for meme {meme_key}: stored={text_vector.shape[0]}, query={query_embedding.shape[0]}")
+                    caption = meme_data.get(b'caption', b'').decode()
+                    
+                    # For Arabic queries, prioritize tag and caption text matching over vector similarity
+                    if has_arabic:
+                        # Calculate direct tag matches for Arabic
+                        tag_scores = []
+                        exact_match_found = False
                         
-                        try:
-                            # Resize the stored vector to match query dimensions
-                            if text_vector.shape[0] < query_embedding.shape[0]:
-                                # Pad with zeros if smaller
-                                padding = np.zeros(query_embedding.shape[0] - text_vector.shape[0], dtype=np.float32)
-                                text_vector = np.concatenate([text_vector, padding])
-                            else:
-                                # Truncate if larger
-                                text_vector = text_vector[:query_embedding.shape[0]]
+                        for tag in tags:
+                            # Normalize tag for Arabic comparison
+                            normalized_tag = normalize_arabic(tag.lower())
+                            
+                            # Check for exact/strong matches
+                            if normalized_query == normalized_tag or normalized_query in normalized_tag or normalized_tag in normalized_query:
+                                tag_scores.append(1.0)
+                                exact_match_found = True
+                                logging.info(f"Exact match found for '{query}' in tag '{tag}'")
+                                break
+                            
+                            # Calculate similarity
+                            tag_sim = text_similarity(normalized_query, normalized_tag)
+                            tag_scores.append(tag_sim)
+                        
+                        # Calculate caption match score
+                        normalized_caption = normalize_arabic(caption.lower())
+                        caption_score = text_similarity(normalized_query, normalized_caption)
+                        
+                        # If we have a near-exact match in tags, boost the score significantly
+                        if exact_match_found:
+                            text_match_score = 1.0
+                            semantic_similarity = 1.0  # Override semantic score for exact matches
+                        else:
+                            # Get best tag match score
+                            best_tag_score = max(tag_scores) if tag_scores else 0
+                            
+                            # Calculate text match score giving more weight to tags for Arabic
+                            text_match_score = max(
+                                caption_score * 0.4,  # Less weight for caption
+                                best_tag_score * 0.9   # More weight for tags in Arabic
+                            )
+                            
+                            # Calculate vector similarity if available and no exact match found
+                            semantic_similarity = 0.0
+                            if query_embedding is not None and not exact_match_found and b'text_vector' in meme_data:
+                                text_vector = np.frombuffer(meme_data[b'text_vector'], dtype=np.float32)
                                 
-                            # Normalize after resizing
-                            text_vector = text_vector / np.linalg.norm(text_vector)
-                            logging.info(f"Resized stored vector for {meme_key} to {query_embedding.shape[0]} dimensions")
-                        except Exception as resize_error:
-                            logging.error(f"Failed to resize vector for {meme_key}: {str(resize_error)}")
-                            continue
+                                # Handle dimension mismatch between query and stored vectors
+                                if text_vector.shape[0] != query_embedding.shape[0]:
+                                    try:
+                                        # Resize the stored vector to match query dimensions
+                                        if text_vector.shape[0] < query_embedding.shape[0]:
+                                            # Pad with zeros if smaller
+                                            padding = np.zeros(query_embedding.shape[0] - text_vector.shape[0], dtype=np.float32)
+                                            text_vector = np.concatenate([text_vector, padding])
+                                        else:
+                                            # Truncate if larger
+                                            text_vector = text_vector[:query_embedding.shape[0]]
+                                            
+                                        # Normalize after resizing
+                                        text_vector = text_vector / np.linalg.norm(text_vector)
+                                    except Exception as resize_error:
+                                        logging.error(f"Failed to resize vector for {meme_key}: {str(resize_error)}")
+                                        continue
+                                
+                                semantic_similarity = cosine_similarity(query_embedding, text_vector)
+                        
+                        # For Arabic, prioritize text matching but still consider semantic similarity
+                        # However for Arabic, we should weight exact/close matches more heavily
+                        final_score = text_match_score * 0.8 + (semantic_similarity * 0.2 if semantic_similarity > 0 else 0)
+                        
+                        # Boost score if text match is strong
+                        if text_match_score > 0.7:
+                            final_score = max(final_score, 0.8)  # Ensure high-relevance results get high scores
+                        
+                        boost = 0.0  # For clarity in the API response
+                    else:
+                        # For non-Arabic queries, use the balanced approach
+                        # Calculate vector similarity if available
+                        semantic_similarity = 0.0
+                        if query_embedding is not None and b'text_vector' in meme_data:
+                            text_vector = np.frombuffer(meme_data[b'text_vector'], dtype=np.float32)
+                            
+                            # Handle dimension mismatch between query and stored vectors
+                            if text_vector.shape[0] != query_embedding.shape[0]:
+                                try:
+                                    # Resize the stored vector to match query dimensions
+                                    if text_vector.shape[0] < query_embedding.shape[0]:
+                                        # Pad with zeros if smaller
+                                        padding = np.zeros(query_embedding.shape[0] - text_vector.shape[0], dtype=np.float32)
+                                        text_vector = np.concatenate([text_vector, padding])
+                                    else:
+                                        # Truncate if larger
+                                        text_vector = text_vector[:query_embedding.shape[0]]
+                                        
+                                    # Normalize after resizing
+                                    text_vector = text_vector / np.linalg.norm(text_vector)
+                                except Exception as resize_error:
+                                    logging.error(f"Failed to resize vector for {meme_key}: {str(resize_error)}")
+                                    continue
+                            
+                            semantic_similarity = cosine_similarity(query_embedding, text_vector)
+                        
+                        # Calculate text similarity scores
+                        tag_scores = []
+                        for tag in tags:
+                            tag_sim = text_similarity(query, tag)
+                            tag_scores.append(tag_sim)
+                        
+                        caption_score = text_similarity(query, caption) if caption else 0
+                        
+                        # Get best tag match score
+                        best_tag_score = max(tag_scores) if tag_scores else 0
+                        
+                        # Calculate text match score with higher weights
+                        text_match_score = max(
+                            caption_score,  # Full weight for caption matches
+                            best_tag_score  # Full weight for tag matches
+                        )
+                        
+                        # Boost score if we have both good semantic and text matches
+                        if semantic_similarity > 0.5 and text_match_score > 0.5:
+                            boost = min(semantic_similarity, text_match_score) * 0.2
+                        else:
+                            boost = 0
+                        
+                        # Final score balances text matches and semantic similarity
+                        final_score = max(
+                            text_match_score * 0.6 + semantic_similarity * 0.4,  # Text-focused score
+                            semantic_similarity * 0.6 + text_match_score * 0.4   # Semantic-focused score
+                        ) + boost
+                        
+                        # Ensure very relevant results get high scores
+                        if text_match_score > 0.8 or semantic_similarity > 0.8:
+                            final_score = max(final_score, 0.9)  # Minimum score for highly relevant results
                     
-                    semantic_similarity = cosine_similarity(query_embedding, text_vector)
-
                     # Get meme ID from key
                     meme_id = int(meme_key.decode().split(':')[1])
                     
-                    # Get tags and caption
-                    tags = json.loads(meme_data[b'tags'].decode())
-                    caption = meme_data.get(b'caption', b'').decode()
+                    # Only include results with scores above a minimum threshold
+                    # Set a higher threshold for Arabic to ensure better quality
+                    min_threshold = 0.3 if has_arabic else 0.2
                     
-                    # Calculate text similarity scores
-                    tag_scores = []
-                    for tag in tags:
-                        # Check both Arabic and English tags
-                        tag_sim = text_similarity(query, tag)
-                        # For Arabic tags, check word by word
-                        if any(c.isalpha() and ord(c) > 128 for c in tag):  # Has Arabic chars
-                            words = tag.split()
-                            for word in words:
-                                word_sim = text_similarity(query, word)
-                                if word_sim > tag_sim:
-                                    tag_sim = word_sim
-                        tag_scores.append(tag_sim)
-                    
-                    caption_score = text_similarity(query, caption) if caption else 0
-                    
-                    # Get best tag match score
-                    best_tag_score = max(tag_scores) if tag_scores else 0
-                    
-                    # Calculate text match score with higher weights
-                    text_match_score = max(
-                        caption_score,  # Full weight for caption matches
-                        best_tag_score  # Full weight for tag matches
-                    )
-                    
-                    # Boost score if we have both good semantic and text matches
-                    if semantic_similarity > 0.5 and text_match_score > 0.5:
-                        boost = min(semantic_similarity, text_match_score) * 0.2
-                    else:
-                        boost = 0
-                    
-                    # Final score prioritizes text matches but considers semantic similarity
-                    final_score = max(
-                        text_match_score * 0.8 + semantic_similarity * 0.2,  # Text-focused score
-                        semantic_similarity * 0.8 + text_match_score * 0.2,  # Semantic-focused score
-                    ) + boost
-                    
-                    # Ensure very relevant results get high scores
-                    if text_match_score > 0.8 or semantic_similarity > 0.8:
-                        final_score = max(final_score, 0.9)  # Minimum score for highly relevant results
-                     
-                    results.append({
-                        'id': meme_id,
-                        'score': float(final_score),
-                        'semantic_similarity': float(semantic_similarity),
-                        'text_match_score': float(text_match_score),
-                        'caption_score': float(caption_score),
-                        'best_tag_score': float(best_tag_score),
-                        'boost': float(boost)
-                    })
+                    if final_score >= min_threshold:
+                        results.append({
+                            'id': meme_id,
+                            'score': float(final_score),
+                            'semantic_similarity': float(semantic_similarity),
+                            'text_match_score': float(text_match_score),
+                            'caption_score': float(caption_score) if 'caption_score' in locals() else 0.0,
+                            'best_tag_score': float(best_tag_score) if 'best_tag_score' in locals() else 0.0,
+                            'boost': float(boost) if 'boost' in locals() else 0.0,
+                            'has_exact_match': exact_match_found if 'exact_match_found' in locals() else False
+                        })
                 except Exception as e:
                     logging.error(f"Error processing meme {meme_key}: {str(e)}")
                     continue
@@ -1360,6 +1411,8 @@ def text_search():
         # Sort by score in descending order and limit results
         results.sort(key=lambda x: x['score'], reverse=True)
         results = results[:limit]
+        
+        logging.info(f"Found {len(results)} matching results for query '{query}'")
         
         return jsonify({
             'results': results
