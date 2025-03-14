@@ -353,12 +353,7 @@ def extract_video_frames(video_url: str, num_frames: int = 5) -> List[Image.Imag
                     thumbnail_candidates = [
                         f"{base_dir}/{base_name}.jpg",
                         f"{base_dir}/{base_name}_preview.jpg",
-                        f"{base_dir}/{base_name}_thumb.jpg",
-                        f"{base_dir}/thumbs/{base_name}.jpg",
-                        # Try with different parent directory
-                        f"{base_dir.rsplit('/', 1)[0]}/thumbnails/{base_name}.jpg",
-                        # Try with video ID only
-                        f"{base_dir.rsplit('/', 1)[0]}/thumbnails/{base_dir.rsplit('/', 1)[1]}.jpg",
+                        f"{base_dir}/{base_name}_thumb.jpg"
                     ]
                     
                     for thumb_url in thumbnail_candidates:
@@ -822,7 +817,7 @@ def search_memes(query: str, limit: int = 20) -> List[Dict]:
             base_query = f"({base_query} | {text_query})"
         
         # Create hybrid query with vector similarity
-        vector_query = redis_client.ft("meme_idx").create_query(
+        vector_query = redis_client.ft(config.REDIS_INDEX_NAME).create_query(
             base_query,
             query_params={
                 "vec": query_embedding.astype(np.float32).tobytes()
@@ -831,7 +826,7 @@ def search_memes(query: str, limit: int = 20) -> List[Dict]:
         )
         
         # Execute search
-        results = redis_client.ft("meme_idx").search(vector_query)
+        results = redis_client.ft(config.REDIS_INDEX_NAME).search(vector_query)
         
         # Process results
         memes = []
@@ -973,108 +968,128 @@ def batch_index_memes():
 
         logging.info(f"Batch indexing {len(memes)} memes")
         
-        # Process in larger batches for better GPU utilization
-        batch_size = BATCH_SIZE
-        for i in range(0, len(memes), batch_size):
-            batch = memes[i:i+batch_size]
-            
-            # Collect all text content and media URLs for batch processing
-            text_contents = []
-            media_urls = []
-            meme_ids = []
-            meme_types = []
-            
-            for meme in batch:
+        results = {
+            'success': [],
+            'failed': []
+        }
+        
+        # Process each meme
+        for meme in memes:
+            try:
                 meme_id = meme.get('id')
                 media_url = meme.get('media_url')
+                meme_type = meme.get('meme_type', 'image')
                 tags = meme.get('tags', [])
                 caption = meme.get('caption', '')
-                meme_type = meme.get('meme_type', 'image')
                 
                 if not meme_id or not media_url:
-                    logging.warning(f"Skipping meme with missing id or media_url: {meme}")
+                    results['failed'].append({
+                        'id': meme_id or 'unknown',
+                        'error': 'Missing required fields: id and media_url'
+                    })
                     continue
-                    
-                text_content = ' '.join(tags + [caption] if caption else tags)
-                text_contents.append(text_content)
-                media_urls.append(media_url)
-                meme_ids.append(meme_id)
-                meme_types.append(meme_type)
-
-            if not meme_ids:
-                continue
-
-            # Generate text embeddings in larger batches
-            try:
-                with torch.cuda.amp.autocast() if device == 'cuda' else nullcontext():
-                    text_embeddings = []
-                    for j in range(0, len(text_contents), BATCH_SIZE):
-                        sub_batch = text_contents[j:j+BATCH_SIZE]
-                        batch_embeddings = encoder.text_encoder.encode(
-                            sub_batch,
-                            convert_to_tensor=True,
-                            normalize_embeddings=True,
-                            batch_size=BATCH_SIZE
-                        )
-                        text_embeddings.extend(batch_embeddings.cpu().numpy())
-            except Exception as e:
-                logging.error(f"Error generating text embeddings: {str(e)}")
-                continue
-
-            # Generate media embeddings in batches
-            try:
-                with torch.cuda.amp.autocast() if device == 'cuda' else nullcontext():
-                    img_embeddings = []
-                    for j in range(0, len(media_urls), BATCH_SIZE):
-                        sub_batch_urls = media_urls[j:j+BATCH_SIZE]
-                        sub_batch_types = meme_types[j:j+BATCH_SIZE]
+                
+                # Create Redis key for meme
+                meme_key = f"meme:{meme_id}"
+                
+                # Generate embeddings based on meme type
+                img_embedding = None
+                try:
+                    if meme_type == 'video':
+                        img_embedding = get_video_embedding(media_url)
+                    else:  # image
+                        img_embedding = get_image_embedding(media_url)
                         
-                        # Process images and videos separately
-                        batch_embeddings = []
-                        for url, mtype in zip(sub_batch_urls, sub_batch_types):
-                            if mtype == 'video':
-                                emb = get_video_embedding(url)
+                    # Check image embedding dimensions
+                    if img_embedding is not None and img_embedding.shape[0] != config.CLIP_EMBEDDING_DIM:
+                        logging.warning(f"Image embedding dimension mismatch for meme {meme_id}: got {img_embedding.shape[0]}, expected {config.CLIP_EMBEDDING_DIM}")
+                        
+                        if img_embedding.shape[0] < config.CLIP_EMBEDDING_DIM:
+                            # Pad with zeros if smaller
+                            padding = np.zeros(config.CLIP_EMBEDDING_DIM - img_embedding.shape[0], dtype=np.float32)
+                            img_embedding = np.concatenate([img_embedding, padding])
+                        else:
+                            # Truncate if larger
+                            img_embedding = img_embedding[:config.CLIP_EMBEDDING_DIM]
+                        
+                        # Normalize after resizing
+                        img_embedding = img_embedding / np.linalg.norm(img_embedding)
+                        logging.info(f"Resized image embedding for meme {meme_id} to {config.CLIP_EMBEDDING_DIM} dimensions")
+                except Exception as e:
+                    logging.error(f"Failed to generate image embedding for meme {meme_id}: {str(e)}")
+                
+                # Generate text embedding for tags and caption
+                text_embedding = None
+                tag_text = ", ".join(tags)
+                text_content = f"{caption} {tag_text}".strip()
+                
+                if text_content:
+                    try:
+                        text_embedding = get_text_embedding(text_content)
+                        
+                        # Check text embedding dimensions
+                        if text_embedding is not None and text_embedding.shape[0] != config.TEXT_EMBEDDING_DIM:
+                            logging.warning(f"Text embedding dimension mismatch for meme {meme_id}: got {text_embedding.shape[0]}, expected {config.TEXT_EMBEDDING_DIM}")
+                            
+                            if text_embedding.shape[0] < config.TEXT_EMBEDDING_DIM:
+                                # Pad with zeros if smaller
+                                padding = np.zeros(config.TEXT_EMBEDDING_DIM - text_embedding.shape[0], dtype=np.float32)
+                                text_embedding = np.concatenate([text_embedding, padding])
                             else:
-                                emb = get_image_embedding(url)
-                            batch_embeddings.append(emb)
-                        
-                        img_embeddings.extend(batch_embeddings)
-                        
-                        # Clear CUDA cache periodically
-                        if device == 'cuda':
-                            torch.cuda.empty_cache()
+                                # Truncate if larger
+                                text_embedding = text_embedding[:config.TEXT_EMBEDDING_DIM]
+                            
+                            # Normalize after resizing
+                            text_embedding = text_embedding / np.linalg.norm(text_embedding)
+                            logging.info(f"Resized text embedding for meme {meme_id} to {config.TEXT_EMBEDDING_DIM} dimensions")
+                    except Exception as e:
+                        logging.error(f"Failed to generate text embedding for meme {meme_id}: {str(e)}")
+                
+                # Store meme data and embeddings in Redis
+                meme_data = {
+                    'id': meme_id,
+                    'media_url': media_url,
+                    'meme_type': meme_type,
+                    'tags': json.dumps(tags),
+                    'caption': caption,
+                    'text_content': text_content,
+                    'indexed_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                }
+                
+                # Add emotions field (empty JSON object) if not present
+                meme_data['emotions'] = json.dumps({})
+                
+                # Add embeddings if available
+                if img_embedding is not None:
+                    meme_data['img_vector'] = img_embedding.astype(np.float32).tobytes()
+                
+                if text_embedding is not None:
+                    meme_data['text_vector'] = text_embedding.astype(np.float32).tobytes()
+                
+                # Save to Redis
+                redis_client.hset(meme_key, mapping=meme_data)
+                
+                results['success'].append(meme_id)
+                
             except Exception as e:
-                logging.error(f"Error generating media embeddings: {str(e)}")
-                continue
-
-            # Store embeddings in Redis using pipeline for better performance
-            with redis_client.pipeline() as pipe:
-                for j, (meme_id, text_emb, img_emb) in enumerate(zip(meme_ids, text_embeddings, img_embeddings)):
-                    meme_key = f"meme:{meme_id}"
-                    pipe.hset(
-                        meme_key,
-                        mapping={
-                            'text_vector': text_emb.tobytes(),
-                            'img_vector': img_emb.tobytes(),
-                            'tags': json.dumps(batch[j].get('tags', [])),
-                            'caption': batch[j].get('caption', ''),
-                            'meme_type': meme_types[j]
-                        }
-                    )
-                pipe.execute()
-
-            # Clear memory
-            del text_embeddings
-            del img_embeddings
-            if device == 'cuda':
-                torch.cuda.empty_cache()
-            gc.collect()
-
-        return jsonify({'status': 'success', 'indexed': len(memes)}), 200
-
+                error_message = str(e)
+                logging.error(f"Error processing meme {meme.get('id', 'unknown')}: {error_message}")
+                results['failed'].append({
+                    'id': meme.get('id', 'unknown'),
+                    'error': error_message
+                })
+        
+        return jsonify({
+            'status': 'complete',
+            'total': len(memes),
+            'successful': len(results['success']),
+            'failed': len(results['failed']),
+            'results': results
+        }), 200
+        
     except Exception as e:
-        logging.error(f"Error in batch indexing: {str(e)}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logging.error(f"Error in batch index memes: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/search_by_text', methods=['POST'])
 def search_by_text():
@@ -1216,6 +1231,25 @@ def text_search():
                     convert_to_tensor=True,
                     normalize_embeddings=True
                 ).cpu().numpy()
+                
+            # Ensure query embedding has the correct dimensions (TEXT_EMBEDDING_DIM)
+            if query_embedding is not None and query_embedding.shape[0] != config.TEXT_EMBEDDING_DIM:
+                logging.warning(f"Query embedding dimension mismatch: got {query_embedding.shape[0]}, expected {config.TEXT_EMBEDDING_DIM}")
+                
+                try:
+                    if query_embedding.shape[0] < config.TEXT_EMBEDDING_DIM:
+                        # Pad with zeros if smaller
+                        padding = np.zeros(config.TEXT_EMBEDDING_DIM - query_embedding.shape[0], dtype=np.float32)
+                        query_embedding = np.concatenate([query_embedding, padding])
+                    else:
+                        # Truncate if larger
+                        query_embedding = query_embedding[:config.TEXT_EMBEDDING_DIM]
+                    
+                    # Normalize the vector after resizing
+                    query_embedding = query_embedding / np.linalg.norm(query_embedding)
+                    logging.info(f"Resized query embedding to {config.TEXT_EMBEDDING_DIM} dimensions")
+                except Exception as resize_error:
+                    logging.error(f"Failed to resize query embedding: {str(resize_error)}")
 
         # Search Redis for matching memes
         results = []
@@ -1234,7 +1268,32 @@ def text_search():
                         continue
 
                     # Get text vector and calculate semantic similarity
+                    if b'text_vector' not in meme_data:
+                        continue
+                        
                     text_vector = np.frombuffer(meme_data[b'text_vector'], dtype=np.float32)
+                    
+                    # Handle dimension mismatch between query and stored vectors
+                    if text_vector.shape[0] != query_embedding.shape[0]:
+                        logging.warning(f"Dimension mismatch for meme {meme_key}: stored={text_vector.shape[0]}, query={query_embedding.shape[0]}")
+                        
+                        try:
+                            # Resize the stored vector to match query dimensions
+                            if text_vector.shape[0] < query_embedding.shape[0]:
+                                # Pad with zeros if smaller
+                                padding = np.zeros(query_embedding.shape[0] - text_vector.shape[0], dtype=np.float32)
+                                text_vector = np.concatenate([text_vector, padding])
+                            else:
+                                # Truncate if larger
+                                text_vector = text_vector[:query_embedding.shape[0]]
+                                
+                            # Normalize after resizing
+                            text_vector = text_vector / np.linalg.norm(text_vector)
+                            logging.info(f"Resized stored vector for {meme_key} to {query_embedding.shape[0]} dimensions")
+                        except Exception as resize_error:
+                            logging.error(f"Failed to resize vector for {meme_key}: {str(resize_error)}")
+                            continue
+                    
                     semantic_similarity = cosine_similarity(query_embedding, text_vector)
 
                     # Get meme ID from key
@@ -1284,7 +1343,7 @@ def text_search():
                     # Ensure very relevant results get high scores
                     if text_match_score > 0.8 or semantic_similarity > 0.8:
                         final_score = max(final_score, 0.9)  # Minimum score for highly relevant results
-                    
+                     
                     results.append({
                         'id': meme_id,
                         'score': float(final_score),
@@ -1297,15 +1356,15 @@ def text_search():
                 except Exception as e:
                     logging.error(f"Error processing meme {meme_key}: {str(e)}")
                     continue
-
-            # Sort by score
-            results = sorted(results, key=lambda x: x['score'], reverse=True)
-            
-            # Apply limit
-            results = results[:limit]
-
-        return jsonify({'results': results}), 200
-
+        
+        # Sort by score in descending order and limit results
+        results.sort(key=lambda x: x['score'], reverse=True)
+        results = results[:limit]
+        
+        return jsonify({
+            'results': results
+        }), 200
+        
     except Exception as e:
         logging.error(f"Error in text search: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -1313,40 +1372,108 @@ def text_search():
 def setup_redis_index():
     """Create Redis search indices for hybrid search"""
     try:
-        # Drop existing indices if they exist
+        # Try to drop index if it exists
         try:
-            redis_client.ft("idx:meme").dropindex()
+            redis_client.ft(config.REDIS_INDEX_NAME).dropindex()
+            logging.info(f"Dropped existing Redis index: {config.REDIS_INDEX_NAME}")
         except:
-            pass
+            logging.info(f"No existing index to drop: {config.REDIS_INDEX_NAME}")
 
-        # Define fields for the search index
+        # Define schema
         schema = (
-            TagField("meme_type"),
-            TextField("tags", weight=3.0),
-            TextField("caption"),
-            VectorField("img_vector",
-                "FLAT", {
-                    "TYPE": "FLOAT32",
-                    "DIM": CLIP_EMBEDDING_DIM,
-                    "DISTANCE_METRIC": "COSINE"
-                }),
-            VectorField("text_vector",
-                "FLAT", {
-                    "TYPE": "FLOAT32",
-                    "DIM": TEXT_EMBEDDING_DIM,
-                    "DISTANCE_METRIC": "COSINE"
-                })
+            TextField("id"),
+            TextField("caption", weight=5.0),
+            TextField("text_content", weight=2.0),
+            TextField("type"),
+            TagField("tags"),
+            VectorField("img_vector", 
+                        "HNSW", {
+                            "TYPE": "FLOAT32",
+                            "DIM": config.CLIP_EMBEDDING_DIM,
+                            "DISTANCE_METRIC": "COSINE"
+                        }),
+            VectorField("text_vector", 
+                        "HNSW", {
+                            "TYPE": "FLOAT32",
+                            "DIM": config.TEXT_EMBEDDING_DIM,
+                            "DISTANCE_METRIC": "COSINE"
+                        }),
+            TextField("emotions")
         )
 
-        # Create the index
-        redis_client.ft("idx:meme").create_index(
+        # Create index
+        redis_client.ft(config.REDIS_INDEX_NAME).create_index(
             schema,
             definition=IndexDefinition(prefix=["meme:"])
         )
-        logging.info("Redis search index created successfully")
+        logging.info(f"Redis search index created successfully with dimensions: CLIP={config.CLIP_EMBEDDING_DIM}, TEXT={config.TEXT_EMBEDDING_DIM}")
     except Exception as e:
         logging.error(f"Error setting up Redis index: {str(e)}")
         raise
+
+@app.route('/rebuild_index', methods=['POST'])
+def rebuild_index():
+    """Rebuild the Redis search index and mark all memes for reindexing"""
+    try:
+        # First recreate the Redis index
+        setup_redis_index()
+        
+        # Clear all dimension mismatch issues by marking memes for reindexing
+        meme_keys = redis_client.keys("meme:*")
+        total = len(meme_keys)
+        processed = 0
+        mismatch_count = 0
+        
+        for meme_key in meme_keys:
+            try:
+                # Check if the vector dimensions match the expected dimensions
+                meme_data = redis_client.hgetall(meme_key)
+                
+                if b'text_vector' in meme_data:
+                    text_vector = np.frombuffer(meme_data[b'text_vector'], dtype=np.float32)
+                    
+                    # If dimensions don't match the current config, mark for reindexing
+                    if text_vector.shape[0] != config.TEXT_EMBEDDING_DIM:
+                        # Extract ID from key
+                        meme_id = meme_key.decode('utf-8').split(':')[1]
+                        logging.info(f"Marking meme {meme_id} for reindexing due to dimension mismatch: {text_vector.shape[0]} != {config.TEXT_EMBEDDING_DIM}")
+                        
+                        # Add to list of memes that need reindexing
+                        redis_client.sadd('memes:reindex', meme_id)
+                        mismatch_count += 1
+                
+                if b'img_vector' in meme_data:
+                    img_vector = np.frombuffer(meme_data[b'img_vector'], dtype=np.float32)
+                    
+                    # If dimensions don't match the current config, mark for reindexing
+                    if img_vector.shape[0] != config.CLIP_EMBEDDING_DIM:
+                        # Extract ID from key
+                        meme_id = meme_key.decode('utf-8').split(':')[1]
+                        logging.info(f"Marking meme {meme_id} for reindexing due to image dimension mismatch: {img_vector.shape[0]} != {config.CLIP_EMBEDDING_DIM}")
+                        
+                        # Add to list of memes that need reindexing
+                        redis_client.sadd('memes:reindex', meme_id)
+                        mismatch_count += 1
+                
+                processed += 1
+                if processed % 100 == 0:
+                    logging.info(f"Processed {processed}/{total} memes")
+                
+            except Exception as e:
+                logging.error(f"Error processing meme {meme_key} for reindex marking: {str(e)}")
+                continue
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Redis index rebuilt with TEXT_EMBEDDING_DIM={config.TEXT_EMBEDDING_DIM}, CLIP_EMBEDDING_DIM={config.CLIP_EMBEDDING_DIM}',
+            'memes_processed': processed,
+            'dimension_mismatches': mismatch_count,
+            'memes_to_reindex': redis_client.scard('memes:reindex')
+        }), 200
+    
+    except Exception as e:
+        logging.error(f"Error rebuilding index: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     # Initialize Redis index
