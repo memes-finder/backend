@@ -1072,7 +1072,7 @@ def batch_index_memes():
                     continue
                     
                 # Extract meme data
-                content_url = meme_data.get('url')
+                content_url = meme_data.get('url', '')
                 meme_type = meme_data.get('type', 'image')
                 text_content = meme_data.get('text_content', '')
                 caption = meme_data.get('caption', '')
@@ -1156,19 +1156,19 @@ def batch_index_memes():
                 try:
                     redis_key = f"meme:{meme_id}"
                     
-                    # Prepare data for Redis
+                    # Prepare data for Redis - ensure all values are of proper types
                     redis_data = {
-                        'meme_id': meme_id,
-                        'content_url': content_url,
-                        'meme_type': meme_type,
-                        'tags': json.dumps(tags),
-                        'caption': caption,
-                        'text_content': text_content,
+                        'meme_id': str(meme_id),
+                        'content_url': str(content_url) if content_url is not None else '',
+                        'meme_type': str(meme_type) if meme_type is not None else 'image',
+                        'tags': json.dumps(tags) if tags is not None else '{}',
+                        'caption': str(caption) if caption is not None else '',
+                        'text_content': str(text_content) if text_content is not None else '',
                         'indexed_at': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     }
                     
                     # Add emotions field (empty JSON object) if not present
-                    if 'emotions' not in meme_data:
+                    if 'emotions' not in meme_data or meme_data['emotions'] is None:
                         redis_data['emotions'] = '{}'
                     else:
                         redis_data['emotions'] = json.dumps(meme_data['emotions'])
@@ -1180,6 +1180,12 @@ def batch_index_memes():
                     # Add image vector if available
                     if image_embedding is not None:
                         redis_data['image_vector'] = image_embedding.tobytes()
+                    
+                    # Ensure all values are valid types for Redis
+                    for key, value in list(redis_data.items()):
+                        if value is None:
+                            logging.warning(f"Removing None value for key '{key}' for meme {meme_id}")
+                            del redis_data[key]
                     
                     # Save to Redis
                     redis_client.hmset(redis_key, redis_data)
@@ -1347,7 +1353,7 @@ def text_search():
                             
                             # Calculate text match score giving more weight to tags for Arabic
                             text_match_score = max(
-                                caption_score * 0.4,  # Less weight for caption
+                                caption_score * 0.4,  # Less weight for caption matches
                                 best_tag_score * 0.9   # More weight for tags in Arabic
                             )
                             
@@ -1522,7 +1528,7 @@ def search_by_text():
                 
                 if not meme_data or b'text_vector' not in meme_data:
                     continue
-                
+
                 # Get meme ID from key
                 meme_id = int(meme_key.decode().split(':')[1])
                 
