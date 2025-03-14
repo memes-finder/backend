@@ -626,28 +626,32 @@ def get_image_embedding(image_url: str) -> np.ndarray:
                 # Generate embedding
                 embedding = encoder.clip_model.get_image_features(image_input)
                 
-                # Convert to numpy array
-                embedding = embedding.cpu().numpy().flatten()
+                # Convert to numpy array and ensure it's 1D
+                embedding = embedding.cpu().numpy()
+                original_shape = embedding.shape
+                embedding = embedding.flatten()
+                
+                logging.info(f"Generated embedding with shape {original_shape}, flattened to {embedding.shape}")
                 
                 # Ensure embedding has the correct dimensions
                 if embedding.shape[0] != config.CLIP_EMBEDDING_DIM:
                     logging.warning(f"Image embedding dimension mismatch: got {embedding.shape[0]}, expected {config.CLIP_EMBEDDING_DIM}")
                     
-                    # Always ensure embedding is 1D before resizing
-                    if len(embedding.shape) > 1:
-                        embedding = embedding.flatten()
-                    
                     # Resize embedding to match expected dimensions
                     if embedding.shape[0] < config.CLIP_EMBEDDING_DIM:
-                        # Pad with zeros if smaller
-                        padding = np.zeros(config.CLIP_EMBEDDING_DIM - embedding.shape[0], dtype=np.float32)
+                        # Pad with zeros if smaller (ensure padding is 1D)
+                        padding_size = config.CLIP_EMBEDDING_DIM - embedding.shape[0]
+                        padding = np.zeros(padding_size, dtype=np.float32)
+                        logging.info(f"Adding padding with shape {padding.shape} to embedding with shape {embedding.shape}")
                         embedding = np.concatenate([embedding, padding])
                     else:
                         # Truncate if larger
                         embedding = embedding[:config.CLIP_EMBEDDING_DIM]
                 
                 # Normalize embedding
-                embedding = embedding / np.linalg.norm(embedding)
+                norm = np.linalg.norm(embedding)
+                if norm > 0:
+                    embedding = embedding / norm
                 
                 # Cache embedding
                 redis_client.set(cache_key, embedding.tobytes())
@@ -1044,134 +1048,165 @@ def index_meme():
 
 @app.route('/batch_index_memes', methods=['POST'])
 def batch_index_memes():
-    """Batch index multiple memes with embeddings"""
+    """Batch index memes with both text and image embeddings"""
     try:
         data = request.get_json()
         if not data or 'memes' not in data:
             return jsonify({'error': 'No memes provided'}), 400
-
-        memes = data['memes']
-        if not isinstance(memes, list):
-            return jsonify({'error': 'Memes must be a list'}), 400
-
-        logging.info(f"Batch indexing {len(memes)} memes")
         
+        memes = data['memes']
+        if not memes:
+            return jsonify({'message': 'No memes to index'}), 200
+            
         results = {
             'success': [],
-            'failed': []
+            'failed': [],
+            'warnings': []
         }
         
-        # Process each meme
-        for meme in memes:
+        for meme_data in memes:
             try:
-                meme_id = meme.get('id')
-                media_url = meme.get('media_url')
-                meme_type = meme.get('meme_type', 'image')
-                tags = meme.get('tags', [])
-                caption = meme.get('caption', '')
-                
-                if not meme_id or not media_url:
-                    results['failed'].append({
-                        'id': meme_id or 'unknown',
-                        'error': 'Missing required fields: id and media_url'
-                    })
+                meme_id = str(meme_data.get('id'))
+                if not meme_id:
+                    results['failed'].append({'error': 'Missing meme ID'})
                     continue
+                    
+                # Extract meme data
+                content_url = meme_data.get('url')
+                meme_type = meme_data.get('type', 'image')
+                text_content = meme_data.get('text_content', '')
+                caption = meme_data.get('caption', '')
                 
-                # Create Redis key for meme
-                meme_key = f"meme:{meme_id}"
+                # Get tags
+                tags = meme_data.get('tags', {})
+                if isinstance(tags, list):
+                    tags = {'primary': tags}  # Convert list to dict for backward compatibility
                 
-                # Generate embeddings based on meme type
-                img_embedding = None
-                try:
-                    if meme_type == 'video':
-                        img_embedding = get_video_embedding(media_url)
-                    else:  # image
-                        img_embedding = get_image_embedding(media_url)
-                        
-                    # Check image embedding dimensions
-                    if img_embedding is not None and img_embedding.shape[0] != config.CLIP_EMBEDDING_DIM:
-                        logging.warning(f"Image embedding dimension mismatch for meme {meme_id}: got {img_embedding.shape[0]}, expected {config.CLIP_EMBEDDING_DIM}")
-                        
-                        if img_embedding.shape[0] < config.CLIP_EMBEDDING_DIM:
-                            # Pad with zeros if smaller
-                            padding = np.zeros(config.CLIP_EMBEDDING_DIM - img_embedding.shape[0], dtype=np.float32)
-                            img_embedding = np.concatenate([img_embedding, padding])
-                        else:
-                            # Truncate if larger
-                            img_embedding = img_embedding[:config.CLIP_EMBEDDING_DIM]
-                        
-                        # Normalize after resizing
-                        img_embedding = img_embedding / np.linalg.norm(img_embedding)
-                        logging.info(f"Resized image embedding for meme {meme_id} to {config.CLIP_EMBEDDING_DIM} dimensions")
-                except Exception as e:
-                    logging.error(f"Failed to generate image embedding for meme {meme_id}: {str(e)}")
-                
-                # Generate text embedding for tags and caption
+                # Generate text embedding
+                logging.info(f"Generating text embedding for meme {meme_id}")
                 text_embedding = None
-                tag_text = ", ".join(tags)
-                text_content = f"{caption} {tag_text}".strip()
                 
-                if text_content:
-                    try:
-                        text_embedding = get_text_embedding(text_content)
+                try:
+                    if text_content or caption or tags:
+                        # Combine all text for embedding
+                        all_text = []
                         
-                        # Check text embedding dimensions
-                        if text_embedding is not None and text_embedding.shape[0] != config.TEXT_EMBEDDING_DIM:
-                            logging.warning(f"Text embedding dimension mismatch for meme {meme_id}: got {text_embedding.shape[0]}, expected {config.TEXT_EMBEDDING_DIM}")
+                        if caption:
+                            all_text.append(caption)
                             
-                            if text_embedding.shape[0] < config.TEXT_EMBEDDING_DIM:
-                                # Pad with zeros if smaller
-                                padding = np.zeros(config.TEXT_EMBEDDING_DIM - text_embedding.shape[0], dtype=np.float32)
-                                text_embedding = np.concatenate([text_embedding, padding])
-                            else:
-                                # Truncate if larger
-                                text_embedding = text_embedding[:config.TEXT_EMBEDDING_DIM]
+                        if text_content:
+                            all_text.append(text_content)
                             
-                            # Normalize after resizing
-                            text_embedding = text_embedding / np.linalg.norm(text_embedding)
-                            logging.info(f"Resized text embedding for meme {meme_id} to {config.TEXT_EMBEDDING_DIM} dimensions")
-                    except Exception as e:
-                        logging.error(f"Failed to generate text embedding for meme {meme_id}: {str(e)}")
+                        # Add tags
+                        for tag_list in tags.values():
+                            if isinstance(tag_list, list):
+                                all_text.extend(tag_list)
+                        
+                        combined_text = ' '.join(all_text)
+                        if combined_text.strip():
+                            text_embedding = get_text_embedding(combined_text)
+                            
+                            # Validate dimensions
+                            if text_embedding is not None and text_embedding.shape[0] != config.TEXT_EMBEDDING_DIM:
+                                logging.warning(f"Text embedding dimension mismatch for meme {meme_id}: got {text_embedding.shape[0]}, expected {config.TEXT_EMBEDDING_DIM}")
+                                
+                                # Ensure it's a 1D array
+                                if len(text_embedding.shape) > 1:
+                                    text_embedding = text_embedding.flatten()
+                                
+                                # Resize the embedding
+                                if text_embedding.shape[0] < config.TEXT_EMBEDDING_DIM:
+                                    # Pad with zeros if smaller (ensure padding is 1D)
+                                    padding_size = config.TEXT_EMBEDDING_DIM - text_embedding.shape[0]
+                                    padding = np.zeros(padding_size, dtype=np.float32)
+                                    logging.info(f"Adding text padding with shape {padding.shape} to embedding with shape {text_embedding.shape}")
+                                    text_embedding = np.concatenate([text_embedding, padding])
+                                else:
+                                    # Truncate if larger
+                                    text_embedding = text_embedding[:config.TEXT_EMBEDDING_DIM]
+                                
+                                # Normalize after resizing
+                                norm = np.linalg.norm(text_embedding)
+                                if norm > 0:
+                                    text_embedding = text_embedding / norm
+                                    
+                                logging.info(f"Resized text embedding to {config.TEXT_EMBEDDING_DIM} dimensions")
+                except Exception as text_error:
+                    logging.error(f"Error generating text embedding for meme {meme_id}: {str(text_error)}")
+                    results['warnings'].append({
+                        'id': meme_id,
+                        'warning': f"Text embedding generation failed: {str(text_error)}"
+                    })
                 
-                # Store meme data and embeddings in Redis
-                meme_data = {
-                    'id': meme_id,
-                    'media_url': media_url,
-                    'meme_type': meme_type,
-                    'tags': json.dumps(tags),
-                    'caption': caption,
-                    'text_content': text_content,
-                    'indexed_at': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                }
+                # Generate image embedding for images and videos
+                logging.info(f"Processing image embedding for meme {meme_id}")
+                image_embedding = None
                 
-                # Add emotions field (empty JSON object) if not present
-                meme_data['emotions'] = json.dumps({})
+                if content_url and meme_type in ['image', 'video', 'gif']:
+                    try:
+                        image_embedding = get_or_generate_image_embedding(meme_id, content_url)
+                    except Exception as img_error:
+                        logging.error(f"Failed to generate image embedding for meme {meme_id}: {str(img_error)}")
+                        results['warnings'].append({
+                            'id': meme_id,
+                            'warning': f"Image embedding generation failed: {str(img_error)}"
+                        })
                 
-                # Add embeddings if available
-                if img_embedding is not None:
-                    meme_data['img_vector'] = img_embedding.astype(np.float32).tobytes()
-                
-                if text_embedding is not None:
-                    meme_data['text_vector'] = text_embedding.astype(np.float32).tobytes()
-                
-                # Save to Redis
-                redis_client.hset(meme_key, mapping=meme_data)
-                
-                results['success'].append(meme_id)
-                
-            except Exception as e:
-                error_message = str(e)
-                logging.error(f"Error processing meme {meme.get('id', 'unknown')}: {error_message}")
+                # Index the meme in Redis
+                try:
+                    redis_key = f"meme:{meme_id}"
+                    
+                    # Prepare data for Redis
+                    redis_data = {
+                        'meme_id': meme_id,
+                        'content_url': content_url,
+                        'meme_type': meme_type,
+                        'tags': json.dumps(tags),
+                        'caption': caption,
+                        'text_content': text_content,
+                        'indexed_at': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    }
+                    
+                    # Add emotions field (empty JSON object) if not present
+                    if 'emotions' not in meme_data:
+                        redis_data['emotions'] = '{}'
+                    else:
+                        redis_data['emotions'] = json.dumps(meme_data['emotions'])
+                    
+                    # Add text vector if available
+                    if text_embedding is not None:
+                        redis_data['text_vector'] = text_embedding.tobytes()
+                    
+                    # Add image vector if available
+                    if image_embedding is not None:
+                        redis_data['image_vector'] = image_embedding.tobytes()
+                    
+                    # Save to Redis
+                    redis_client.hmset(redis_key, redis_data)
+                    
+                    # Add to success list
+                    results['success'].append({
+                        'id': meme_id,
+                        'has_text_vector': text_embedding is not None,
+                        'has_image_vector': image_embedding is not None
+                    })
+                    
+                    logging.info(f"Successfully indexed meme {meme_id}")
+                except Exception as redis_error:
+                    logging.error(f"Failed to index meme {meme_id} in Redis: {str(redis_error)}")
+                    results['failed'].append({
+                        'id': meme_id,
+                        'error': f"Redis indexing failed: {str(redis_error)}"
+                    })
+            except Exception as meme_error:
+                logging.error(f"Error processing meme {meme_id if 'meme_id' in locals() else 'unknown'}: {str(meme_error)}")
                 results['failed'].append({
-                    'id': meme.get('id', 'unknown'),
-                    'error': error_message
+                    'id': meme_id if 'meme_id' in locals() else 'unknown',
+                    'error': f"General processing error: {str(meme_error)}"
                 })
         
         return jsonify({
-            'status': 'complete',
-            'total': len(memes),
-            'successful': len(results['success']),
-            'failed': len(results['failed']),
+            'message': f"Processed {len(memes)} memes",
             'results': results
         }), 200
         
@@ -1651,6 +1686,61 @@ def rebuild_index():
     except Exception as e:
         logging.error(f"Error rebuilding index: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+def get_or_generate_image_embedding(meme_id, content_url):
+    """Get image embedding or generate if needed"""
+    try:
+        # Try to get cached image embedding
+        cache_key = f"meme:{meme_id}:image_embedding"
+        cached = redis_client.get(cache_key)
+        if cached:
+            embedding = np.frombuffer(cached, dtype=np.float32)
+            
+            # Validate dimensions
+            if embedding.shape[0] == config.CLIP_EMBEDDING_DIM:
+                return embedding
+            
+            logging.warning(f"Stored image embedding for meme {meme_id} has incorrect dimensions: {embedding.shape[0]}")
+        
+        # Generate new embedding
+        logging.info(f"Generating new image embedding for meme {meme_id}")
+        embedding = get_image_embedding(content_url)
+        
+        if embedding is not None:
+            # Ensure embedding is 1D and has correct shape
+            if len(embedding.shape) > 1:
+                logging.warning(f"Flattening image embedding with shape {embedding.shape}")
+                embedding = embedding.flatten()
+                
+            # Ensure correct dimensions
+            if embedding.shape[0] != config.CLIP_EMBEDDING_DIM:
+                logging.warning(f"Resizing embedding from {embedding.shape[0]} to {config.CLIP_EMBEDDING_DIM}")
+                if embedding.shape[0] < config.CLIP_EMBEDDING_DIM:
+                    # Pad with zeros (ensure padding is 1D)
+                    padding_size = config.CLIP_EMBEDDING_DIM - embedding.shape[0]
+                    padding = np.zeros(padding_size, dtype=np.float32)
+                    logging.info(f"Adding padding with shape {padding.shape} to embedding with shape {embedding.shape}")
+                    embedding = np.concatenate([embedding, padding])
+                else:
+                    # Truncate
+                    embedding = embedding[:config.CLIP_EMBEDDING_DIM]
+                    
+            # Normalize
+            norm = np.linalg.norm(embedding)
+            if norm > 0:
+                embedding = embedding / norm
+                
+            # Cache the embedding
+            redis_client.set(cache_key, embedding.tobytes())
+            return embedding
+        else:
+            logging.error(f"Failed to generate image embedding for meme {meme_id}")
+            # Return zero vector as fallback
+            return np.zeros(config.CLIP_EMBEDDING_DIM, dtype=np.float32)
+            
+    except Exception as e:
+        logging.error(f"Error in get_or_generate_image_embedding for meme {meme_id}: {str(e)}")
+        return np.zeros(config.CLIP_EMBEDDING_DIM, dtype=np.float32)
 
 if __name__ == '__main__':
     # Initialize Redis index
